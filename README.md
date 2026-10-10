@@ -86,8 +86,11 @@ alternative that needs no Docker.
 2. Add **Neon** from the Vercel Marketplace (region `aws-us-east-1`, next to Vercel's default
    `iad1`). Turn on **Preview** branching and "Resource must be active before deployment".
 3. Set the environment variables above.
-4. Deploy. `vercel.json` sets the build command to `pnpm db:migrate && pnpm build`, so every
-   deployment (including each Preview database branch) is migrated automatically.
+4. Deploy. `vercel.json` sets the build command to check the environment variables, run
+   `db:migrate`, then `next build`. Every deployment (including each Preview database branch) is
+   migrated automatically, and a missing `DATABASE_URL` or `BETTER_AUTH_SECRET` stops the build
+   with a message saying what to set. Variables only apply to new deployments, so redeploy after
+   changing them.
 5. For Google sign-in, register `https://<your-domain>/api/auth/callback/google` (and the
    localhost callback for development) in the Google Cloud console.
 

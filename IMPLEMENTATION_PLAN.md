@@ -322,7 +322,7 @@ Configured in `server/auth.ts`.
 1. **Import** the GitHub repo in Vercel. The Next.js preset is detected automatically. The only `vercel.json` setting is the build command (step 4).
 2. **Add Neon** from the Vercel Marketplace and connect it to the project. Under *Deployments Configuration*, turn on **Preview** and **"Resource must be active before deployment"**. Each Preview deployment then gets its own database branch (`preview/<git-branch>`) with its own `DATABASE_URL`.
 3. **Region:** use Vercel's default Functions region **`iad1`** (Washington, D.C.) and create the Neon database in **`aws-us-east-1`** (N. Virginia). Always keep the two in the same region. If you move one, move both.
-4. **Build:** nothing to configure in the dashboard. `vercel.json` sets the build command to `pnpm db:migrate && pnpm build`, so each environment's database (including every Preview branch) is migrated before its build.
+4. **Build:** nothing to configure in the dashboard. `vercel.json` sets the build command to `node scripts/check-env.mjs && pnpm db:migrate && pnpm build`. The check stops the build with clear instructions if `DATABASE_URL` or `BETTER_AUTH_SECRET` is missing (otherwise the migration fails with a cryptic error, or the app deploys with broken sign-in). Each environment's database (including every Preview branch) is migrated before its build.
 5. **Environment variables:**
 
    | Variable | Set by | Environments |
