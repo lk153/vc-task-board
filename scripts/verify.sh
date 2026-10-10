@@ -171,7 +171,7 @@ run "Integration tests" pnpm test:integration
 section "Vercel build (fresh checkout of HEAD, empty database)"
 run "Fresh database" fresh_verify_database
 run "Checkout + frozen install" checkout_head
-run "Env check → migrate → next build" vercel_build
+run "Env check, migrate, next build" vercel_build
 
 section "End-to-end (production build, desktop + mobile)"
 run "Playwright" e2e_tests

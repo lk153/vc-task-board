@@ -32,6 +32,7 @@ To use a Neon dev branch instead of Docker: `vercel link && vercel env pull .env
 | `make db-seed` | Create missing demo accounts and Demo board (never changes existing data) |
 | `make check` | Lint, typecheck, formatting, unit and integration tests |
 | `make ci` | Everything CI runs, including the build and e2e tests |
+| `make verify` | **Final check before `git push`**: everything above, plus a migration drift check, a security audit, and a Vercel-style build of the exact commit in a fresh checkout against an empty database (~1 min) |
 | `make users` / `make set-password EMAIL=… [PASSWORD=…]` | Account maintenance |
 | `make db-down` | Stop Postgres and pgAdmin (data is kept) |
 
