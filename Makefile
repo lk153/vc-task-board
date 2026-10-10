@@ -96,7 +96,7 @@ db-reset: ## Wipe ALL local data and start fresh: migrate + seed (asks first)
 
 ##@ Quality and tests
 
-.PHONY: lint typecheck format format-check test test-integration test-e2e check ci
+.PHONY: lint typecheck format format-check test test-integration test-e2e check ci verify
 lint: ## ESLint
 	$(PNPM) lint
 
@@ -121,6 +121,9 @@ test-e2e: db-up ## End-to-end tests (builds the app; uses the taskboard_e2e data
 check: lint typecheck format-check test test-integration ## Everything fast: lint, types, format, unit, integration
 
 ci: check build test-e2e ## Everything CI runs, including the build and e2e tests
+
+verify: ## Final check before pushing to Vercel (ALLOW_DIRTY=1, SKIP_AUDIT=1 to relax)
+	@bash scripts/verify.sh
 
 ##@ Accounts (maintainer tools)
 
