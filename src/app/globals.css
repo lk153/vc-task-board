@@ -1,0 +1,222 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens from design/design.html. Each token is light-dark(light, dark):
+ * with no theme cookie the page follows the system setting; the theme toggle
+ * sets data-theme on <html>, which pins color-scheme.
+ */
+:root {
+  color-scheme: light dark;
+
+  --bg: light-dark(#f7f7f8, #111115);
+  --header: light-dark(#ffffff, #17171c);
+  --surface: light-dark(#ffffff, #1c1c22);
+  --surface-2: light-dark(#f0f0f2, #25252d);
+  --surface-3: light-dark(#e6e6ea, #2f2f38);
+  --border: light-dark(#e4e4e8, #2c2c35);
+  --border-strong: light-dark(#cdcdd4, #3e3e4a);
+  --text: light-dark(#1c1c21, #ececf1);
+  --muted: light-dark(#5d5d69, #a6a6b3);
+  --accent: light-dark(#2c4f9e, #7a9cf0);
+  --accent-hover: light-dark(#23427f, #93b0f4);
+  --accent-fg: light-dark(#ffffff, #0d1220);
+  --ring: light-dark(rgba(44, 79, 158, 0.22), rgba(122, 156, 240, 0.32));
+  --danger: light-dark(#c8102e, #e04a5e);
+  --danger-hover: light-dark(#a50d26, #ea6476);
+  --danger-soft: light-dark(#fde8eb, #3a1a20);
+  --overlay: light-dark(rgba(18, 18, 28, 0.42), rgba(0, 0, 0, 0.62));
+  --drop: light-dark(rgba(44, 79, 158, 0.06), rgba(122, 156, 240, 0.08));
+  --drop-line: light-dark(#2c4f9e, #7a9cf0);
+  --toast-bg: light-dark(#1c1c21, #ececf1);
+  --toast-fg: light-dark(#f4f4f6, #16161b);
+  --toast-accent: light-dark(#a9c2fa, #2c4f9e);
+
+  /* Tag tones: --t-{tone}-bg / -fg (and -line for status tones). */
+  --t-yellow-bg: light-dark(#ffe58f, #4b3d10);
+  --t-yellow-fg: light-dark(#4a3800, #ffe28a);
+  --t-yellow-line: light-dark(#f5d35c, #8a7322);
+  --t-gray-bg: light-dark(#e6e6ea, #33333c);
+  --t-gray-fg: light-dark(#383840, #d4d4dc);
+  --t-gray-line: light-dark(#d6d6dc, #474752);
+  --t-blue-bg: light-dark(#bcd3ff, #1f3563);
+  --t-blue-fg: light-dark(#123a85, #bcd3ff);
+  --t-blue-line: light-dark(#a9c4fb, #3a5fa8);
+  --t-orange-bg: light-dark(#ffc59e, #55311a);
+  --t-orange-fg: light-dark(#6b2b00, #ffc59e);
+  --t-orange-line: light-dark(#fbb282, #9a5a2e);
+  --t-green-bg: light-dark(#a8e5b4, #173f25);
+  --t-green-fg: light-dark(#0c4a1d, #a8e5b4);
+  --t-green-line: light-dark(#8fd9a0, #2f7a47);
+  --t-pink-bg: light-dark(#ffb8b8, #522024);
+  --t-pink-fg: light-dark(#7a1515, #ffb8b8);
+  --t-red-bg: light-dark(#c8102e, #d0243f);
+  --t-red-fg: #ffffff;
+  --t-lavender-bg: light-dark(#e0d8fc, #30285a);
+  --t-lavender-fg: light-dark(#3f2b8c, #d9d0ff);
+  --t-purple-bg: light-dark(#6d28d9, #7c3aed);
+  --t-purple-fg: #ffffff;
+  --t-navy-bg: light-dark(#2c4f9e, #3a61c0);
+  --t-navy-fg: #ffffff;
+  --t-forest-bg: light-dark(#13703a, #1d7d43);
+  --t-forest-fg: #ffffff;
+  --t-teal-bg: light-dark(#a8e8e1, #12403c);
+  --t-teal-fg: light-dark(#0a4a44, #a8e8e1);
+  --t-slate-bg: light-dark(#d7dfea, #2b3544);
+  --t-slate-fg: light-dark(#2a3647, #cdd7e6);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-canvas: var(--bg);
+  --color-header: var(--header);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-fg: var(--text);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
+  --color-ring: var(--ring);
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+  --color-danger-soft: var(--danger-soft);
+  --color-overlay: var(--overlay);
+  --color-drop: var(--drop);
+  --color-drop-line: var(--drop-line);
+  --color-toast: var(--toast-bg);
+  --color-toast-fg: var(--toast-fg);
+  --color-toast-accent: var(--toast-accent);
+
+  --font-sans: var(--font-noto), system-ui, sans-serif;
+}
+
+@theme {
+  /* Mobile layout below 720px (keep in sync with BREAKPOINT in src/config/board.ts). */
+  --breakpoint-desk: 45rem;
+
+  --shadow-card: 0 1px 2px light-dark(rgba(20, 20, 30, 0.04), rgba(0, 0, 0, 0.3));
+  --shadow-hover: 0 6px 18px light-dark(rgba(20, 20, 30, 0.09), rgba(0, 0, 0, 0.4));
+  --shadow-pop: 0 24px 60px light-dark(rgba(10, 10, 20, 0.22), rgba(0, 0, 0, 0.55));
+  --shadow-fab: 0 8px 24px rgba(20, 30, 60, 0.28);
+  --shadow-focus: 0 0 0 3px var(--ring);
+
+  --animate-fade: tb-fade 0.15s ease-out;
+  --animate-pop: tb-pop 0.18s ease-out;
+  --animate-sheet: tb-sheet 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-toast: tb-toast 0.2s ease-out;
+
+  @keyframes tb-fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes tb-pop {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes tb-sheet {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: none;
+    }
+  }
+  @keyframes tb-toast {
+    from {
+      opacity: 0;
+      transform: translate(-50%, 8px);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+  }
+}
+
+@layer base {
+  html,
+  body {
+    background: var(--bg);
+    color: var(--text);
+  }
+  body {
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+  }
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--muted);
+    opacity: 0.7;
+  }
+  a {
+    color: var(--accent);
+  }
+  a:hover {
+    color: var(--accent-hover);
+  }
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+/* Respect reduced-motion: no slide-ups, pops or fades. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Show the icon for the theme the toggle switches *to*: a moon in light mode, a sun in dark. */
+.theme-dark-only {
+  display: none;
+}
+:root[data-theme="dark"] .theme-dark-only {
+  display: inline-block;
+}
+:root[data-theme="dark"] .theme-light-only {
+  display: none;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .theme-dark-only {
+    display: inline-block;
+  }
+  :root:not([data-theme]) .theme-light-only {
+    display: none;
+  }
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

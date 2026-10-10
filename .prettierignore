@@ -1,0 +1,8 @@
+pnpm-lock.yaml
+design/
+*.md
+*.MD
+src/server/db/migrations/
+.next/
+test-results/
+playwright-report/

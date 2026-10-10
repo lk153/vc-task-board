@@ -1,0 +1,50 @@
+# Local Postgres for development and e2e tests (`pnpm db:up`), plus pgAdmin to
+# browse it in the browser (`pnpm db:admin` → http://localhost:5050).
+# Port 5434 avoids clashing with other Postgres instances on 5432.
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: taskboard
+    ports:
+      - "5434:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  # Local-only database browser: no login, already connected to `db`.
+  # Bound to 127.0.0.1 so it isn't reachable from other machines.
+  pgadmin:
+    image: dpage/pgadmin4:9
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Desktop mode: no pgAdmin login and no master password (local use only).
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+      # Lets servers.json supply the database password, so there's no prompt.
+      PGADMIN_CONFIG_ENABLE_SERVER_PASS_EXEC_CMD: "True"
+      # Required by the image even in desktop mode; never used to sign in.
+      PGADMIN_DEFAULT_EMAIL: pgadmin@taskboard.dev
+      PGADMIN_DEFAULT_PASSWORD: local-only
+      PGADMIN_DISABLE_POSTFIX: "true"
+    ports:
+      - "127.0.0.1:5050:80"
+    volumes:
+      - ./docker/pgadmin/servers.json:/pgadmin4/servers.json:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/misc/ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+volumes:
+  db-data:
