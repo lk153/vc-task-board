@@ -1,6 +1,6 @@
 "use client";
 
-import { Filter, Plus, Search, Users, X } from "lucide-react";
+import { Filter, ListChecks, Plus, Search, Users, X } from "lucide-react";
 import { DEFAULT_STATUS } from "@/config/board";
 import { filterCount } from "@/domain/filter";
 import { Button, IconButton } from "@/components/ui/button";
@@ -29,6 +29,7 @@ export function Header() {
       </div>
       <SearchBox />
       <FilterButton />
+      <SelectButton />
       <ShareButton />
       <ThemeToggle />
       <NewTaskButton />
@@ -109,6 +110,29 @@ function FilterButton() {
           {count}
         </span>
       )}
+    </button>
+  );
+}
+
+/** Turns selection mode on and off (desktop shortcut: Ctrl/⌘-click or X on a card). */
+function SelectButton() {
+  const selecting = useUi((s) => s.selecting);
+  const startSelecting = useUi((s) => s.startSelecting);
+  const stopSelecting = useUi((s) => s.stopSelecting);
+  return (
+    <button
+      type="button"
+      onClick={() => (selecting ? stopSelecting() : startSelecting())}
+      aria-pressed={selecting}
+      aria-label="Select tasks"
+      title="Select tasks (Ctrl/⌘-click or X on a card)"
+      className={cn(
+        "flex h-[34px] min-w-[34px] shrink-0 items-center justify-center gap-1.5 rounded-md border px-2.5 text-[13.5px] text-fg outline-none hover:bg-surface-2 focus-visible:shadow-focus",
+        selecting ? "border-accent bg-surface-2" : "border-line-strong bg-surface",
+      )}
+    >
+      <ListChecks size={15} strokeWidth={1.9} aria-hidden />
+      <span className="hidden desk:inline">Select</span>
     </button>
   );
 }

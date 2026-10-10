@@ -10,7 +10,8 @@ const anyOverlayOpen = () =>
   Boolean(document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]'));
 
 /**
- * Board shortcuts: N new task, / search, Esc closes the filter panel.
+ * Board shortcuts: N new task, / search, Esc leaves selection mode, then closes
+ * the filter panel.
  * Ignored while typing, while a dialog or menu is open, or while dragging.
  * (Esc for dialogs is handled by the dialogs themselves.)
  */
@@ -21,6 +22,10 @@ export function useBoardHotkeys() {
       if (ui.dragging || event.defaultPrevented) return;
       if (anyOverlayOpen() || ui.editor || ui.confirmDeleteId) return;
 
+      if (event.key === "Escape" && ui.selecting) {
+        ui.stopSelecting();
+        return;
+      }
       if (event.key === "Escape" && ui.showFilters) {
         ui.setShowFilters(false);
         return;

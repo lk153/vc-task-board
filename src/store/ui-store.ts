@@ -28,6 +28,10 @@ interface UiState {
   dialog: DialogName | null;
   toast: Toast | null;
   dragging: boolean;
+  /** Selection mode: clicking a card selects it instead of opening the editor. */
+  selecting: boolean;
+  /** Selected task ids (may include tasks that have since been deleted or filtered out). */
+  selected: string[];
 
   setQuery: (query: string) => void;
   toggleFilter: (group: FilterGroup, value: string) => void;
@@ -45,6 +49,12 @@ interface UiState {
   showToast: (message: string, action?: Toast["action"]) => void;
   dismissToast: () => void;
   setDragging: (dragging: boolean) => void;
+  startSelecting: () => void;
+  /** Leaves selection mode and clears the selection. */
+  stopSelecting: () => void;
+  /** Selects or deselects a task (and turns selection mode on). */
+  toggleSelected: (taskId: string) => void;
+  setSelected: (taskIds: string[]) => void;
   /** Fresh filters and panels when switching boards. */
   resetForBoard: () => void;
 }
@@ -61,6 +71,8 @@ export const useUi = create<UiState>()((set) => ({
   dialog: null,
   toast: null,
   dragging: false,
+  selecting: false,
+  selected: [],
 
   setQuery: (query) => set((s) => ({ filters: { ...s.filters, query } })),
   toggleFilter: (group, value) =>
@@ -96,6 +108,16 @@ export const useUi = create<UiState>()((set) => ({
     set({ toast: null });
   },
   setDragging: (dragging) => set({ dragging }),
+  startSelecting: () => set({ selecting: true }),
+  stopSelecting: () => set({ selecting: false, selected: [] }),
+  toggleSelected: (taskId) =>
+    set((s) => ({
+      selecting: true,
+      selected: s.selected.includes(taskId)
+        ? s.selected.filter((id) => id !== taskId)
+        : [...s.selected, taskId],
+    })),
+  setSelected: (selected) => set({ selecting: true, selected }),
   resetForBoard: () =>
     set({
       filters: EMPTY_FILTERS,
@@ -104,5 +126,7 @@ export const useUi = create<UiState>()((set) => ({
       editor: null,
       confirmDeleteId: null,
       dialog: null,
+      selecting: false,
+      selected: [],
     }),
 }));

@@ -47,6 +47,16 @@ export const updateTaskSchema = z
   .refine((value) => Object.keys(value).length > 0, "Nothing to update");
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
 
+/** Bulk status change (and its Undo). At most 500 tasks per request, no duplicates. */
+export const bulkMoveSchema = z.object({
+  tasks: z
+    .array(z.object({ id: z.uuid(), status: statusSchema, position: positionSchema.optional() }))
+    .min(1, "Select at least one task.")
+    .max(500, "Move at most 500 tasks at a time.")
+    .refine((list) => new Set(list.map((t) => t.id)).size === list.length, "Duplicate task ids."),
+});
+export type BulkMoveInput = z.infer<typeof bulkMoveSchema>;
+
 export const boardNameSchema = z
   .string()
   .trim()

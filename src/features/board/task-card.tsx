@@ -2,8 +2,8 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { AlignLeft, Hash, Trash2 } from "lucide-react";
-import type { KeyboardEvent } from "react";
+import { AlignLeft, Check, Hash, Trash2 } from "lucide-react";
+import type { KeyboardEvent, MouseEvent } from "react";
 import { DISPLAY, PRIORITIES, TASK_TYPES } from "@/config/board";
 import { statusLabel, type Task } from "@/domain/task";
 import { assigneeTone, priorityTone, statusTone, toneVars, typeTone } from "@/domain/tone";
@@ -77,11 +77,18 @@ export function TaskCardOverlay({ task }: CardViewProps) {
   );
 }
 
-/** Card in a column. Click / Enter / Space edits; Delete / Backspace deletes; M picks it up (desktop). */
+/**
+ * Card in a column. Click / Enter / Space edits; Delete / Backspace deletes;
+ * M picks it up (desktop). X or Ctrl/⌘-click selects it; in selection mode a
+ * click or Enter / Space selects instead of editing.
+ */
 export function TaskCard({ task, dragDisabled }: { task: Task; dragDisabled: boolean }) {
   const openEdit = useUi((s) => s.openEdit);
   const askDelete = useUi((s) => s.askDelete);
   const dragging = useUi((s) => s.dragging);
+  const selecting = useUi((s) => s.selecting);
+  const isSelected = useUi((s) => s.selected.includes(task.id));
+  const toggleSelected = useUi((s) => s.toggleSelected);
   const priority = PRIORITIES.find((p) => p.id === task.priority);
   const {
     attributes,
@@ -103,14 +110,26 @@ export function TaskCard({ task, dragDisabled }: { task: Task; dragDisabled: boo
     ) {
       return;
     }
-    if (event.key === "Enter" || event.key === " ") {
+    const plainKey = !event.metaKey && !event.ctrlKey && !event.altKey;
+    if ((event.key === "x" || event.key === "X") && plainKey) {
       event.preventDefault();
-      openEdit(task.id);
+      toggleSelected(task.id);
+    } else if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      if (useUi.getState().selecting) toggleSelected(task.id);
+      else openEdit(task.id);
     } else if (event.key === "Delete" || event.key === "Backspace") {
       event.preventDefault();
       askDelete(task.id);
     }
   }
+
+  function onClick(event: MouseEvent) {
+    if (useUi.getState().selecting || event.metaKey || event.ctrlKey) toggleSelected(task.id);
+    else openEdit(task.id);
+  }
+
+  const label = `${task.title}. ${statusLabel(task.status)}${priority ? `, ${priority.label} priority` : ""}.`;
 
   // The delete button sits next to (not inside) the card so the two controls aren't nested.
   return (
@@ -124,21 +143,41 @@ export function TaskCard({ task, dragDisabled }: { task: Task; dragDisabled: boo
         {...attributes}
         {...listeners}
         onKeyDown={onKeyDown}
-        onClick={() => openEdit(task.id)}
+        onClick={onClick}
         data-card-id={task.id}
         // dnd-kit marks the card disabled when dragging is off (mobile), but it's still editable.
         aria-disabled={undefined}
         aria-describedby={dragDisabled ? undefined : attributes["aria-describedby"]}
+        aria-pressed={selecting ? isSelected : attributes["aria-pressed"]}
         aria-roledescription="task card"
-        aria-label={`${task.title}. ${statusLabel(task.status)}${
-          priority ? `, ${priority.label} priority` : ""
-        }. Press Enter to edit, Delete to remove${dragDisabled ? "" : ", M to move"}.`}
-        className={cardClass(DISPLAY.compactCards)}
+        aria-label={
+          selecting
+            ? `${label} Press Enter to ${isSelected ? "deselect" : "select"}.`
+            : `${label} Press Enter to edit, X to select, Delete to remove${dragDisabled ? "" : ", M to move"}.`
+        }
+        className={cn(
+          cardClass(DISPLAY.compactCards),
+          isSelected &&
+            "border-accent bg-[color-mix(in_srgb,var(--accent)_7%,var(--surface))] shadow-[0_0_0_1px_var(--accent)]",
+        )}
         style={{ borderBottomColor: toneVars(statusTone(task.status)).line }}
       >
         <CardContent task={task} />
+        {selecting && (
+          <span
+            aria-hidden
+            className={cn(
+              "absolute top-2.5 right-2.5 grid size-[18px] place-items-center rounded border",
+              isSelected
+                ? "border-accent bg-accent text-accent-fg"
+                : "border-line-strong bg-surface",
+            )}
+          >
+            {isSelected && <Check size={12} strokeWidth={3} />}
+          </span>
+        )}
       </div>
-      {!dragging && (
+      {!dragging && !selecting && (
         <button
           type="button"
           aria-label={`Delete task: ${task.title}`}

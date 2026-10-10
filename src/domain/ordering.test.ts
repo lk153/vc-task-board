@@ -3,6 +3,7 @@ import {
   columnTasks,
   positionAtEnd,
   positionBetween,
+  planBulkMove,
   positionForMove,
   sortTasks,
 } from "./ordering";
@@ -81,5 +82,56 @@ describe("positionForMove", () => {
   it("clamps out-of-range indexes", () => {
     expect(positionForMove(column, "new", 99) > "a2").toBe(true);
     expect(positionForMove(column, "new", -5) < "a0").toBe(true);
+  });
+});
+
+describe("planBulkMove", () => {
+  const tasks = [
+    { id: "a", status: "todo", position: "a0" },
+    { id: "b", status: "todo", position: "a1" },
+    { id: "c", status: "todo", position: "a2" },
+    { id: "d", status: "done", position: "a0" },
+  ] as const;
+
+  it("appends moved tasks to the end of the target column, in the order given", () => {
+    const plan = planBulkMove(tasks, [
+      { id: "c", status: "done" },
+      { id: "a", status: "done" },
+    ]);
+    expect(plan.map((m) => m.id)).toEqual(["c", "a"]);
+    expect(plan.every((m) => m.status === "done")).toBe(true);
+    const [c, a] = plan;
+    expect("a0" < c.position && c.position < a.position).toBe(true);
+  });
+
+  it("leaves tasks that are already in the target column alone", () => {
+    expect(planBulkMove(tasks, [{ id: "d", status: "done" }])).toEqual([]);
+  });
+
+  it("uses explicit positions as-is (Undo)", () => {
+    expect(planBulkMove(tasks, [{ id: "d", status: "todo", position: "a05" }])).toEqual([
+      { id: "d", status: "todo", position: "a05" },
+    ]);
+  });
+
+  it("skips unknown ids and handles several target columns", () => {
+    const plan = planBulkMove(tasks, [
+      { id: "zzz", status: "done" },
+      { id: "a", status: "review" },
+      { id: "b", status: "backlog" },
+    ]);
+    expect(plan.map((m) => [m.id, m.status])).toEqual([
+      ["a", "review"],
+      ["b", "backlog"],
+    ]);
+  });
+
+  it("doesn't count tasks that are leaving when finding the end of a column", () => {
+    // Moving every todo task to done: the done column's end is after "d".
+    const plan = planBulkMove(tasks, [
+      { id: "a", status: "done" },
+      { id: "b", status: "done" },
+    ]);
+    expect(plan.every((m) => m.position > "a0")).toBe(true);
   });
 });

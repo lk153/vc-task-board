@@ -8,7 +8,7 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import { POLL_MS } from "@/config/board";
-import { positionAtEnd, sortTasks } from "@/domain/ordering";
+import { planBulkMove, positionAtEnd, sortTasks, type TaskMove } from "@/domain/ordering";
 import type { BoardSummary, BoardView, Invite, Task, UpdateTaskInput } from "@/domain/task";
 import { api, ApiError } from "@/lib/api-client";
 import { useUi } from "@/store/ui-store";
@@ -163,6 +163,27 @@ export function useRestoreTask(boardId: string) {
       api<Task>(`/api/boards/${boardId}/tasks/${task.id}/restore`, { method: "POST" }),
     apply: withTask,
     settle: (view, saved) => replaceTask(view, saved),
+  });
+}
+
+/** Bulk status change (and its Undo, which passes exact positions). */
+export function useBulkMoveTasks(boardId: string) {
+  return useBoardMutation(boardId, {
+    mutationFn: (moves: TaskMove[]) =>
+      api<Task[]>(`/api/boards/${boardId}/tasks`, { method: "PATCH", body: { tasks: moves } }),
+    apply: (view, moves) => {
+      const plan = new Map(planBulkMove(view.tasks, moves).map((m) => [m.id, m]));
+      return {
+        ...view,
+        tasks: sortTasks(
+          view.tasks.map((t) => {
+            const move = plan.get(t.id);
+            return move ? { ...t, status: move.status, position: move.position } : t;
+          }),
+        ),
+      };
+    },
+    settle: (view, saved) => saved.reduce(replaceTask, view),
   });
 }
 

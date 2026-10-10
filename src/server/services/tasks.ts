@@ -1,7 +1,13 @@
 import "server-only";
-import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
-import { createTaskSchema, updateTaskSchema, type Status, type Task } from "@/domain/task";
-import { positionBetween } from "@/domain/ordering";
+import { and, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import {
+  bulkMoveSchema,
+  createTaskSchema,
+  updateTaskSchema,
+  type Status,
+  type Task,
+} from "@/domain/task";
+import { planBulkMove, positionBetween } from "@/domain/ordering";
 import { db } from "../db/client";
 import { task } from "../db/schema";
 import { conflict, invalid, notFound } from "../errors";
@@ -127,4 +133,52 @@ export async function restoreTask(userId: string, boardId: string, taskId: strin
     .where(and(eq(task.id, taskId), eq(task.boardId, boardId)))
     .returning();
   return toTask(row);
+}
+
+/**
+ * Bulk status change: moves several tasks at once (one transaction). Without
+ * a position a task goes to the end of its new column, in the order given;
+ * with one (Undo) it goes exactly there. Ids that aren't live tasks on this
+ * board are skipped. Returns the tasks that changed.
+ */
+export async function bulkMoveTasks(
+  userId: string,
+  boardId: string,
+  raw: unknown,
+): Promise<Task[]> {
+  await requireMember(userId, boardId);
+  const { tasks: moves } = bulkMoveSchema.parse(raw);
+
+  return db.transaction(async (tx) => {
+    // Lock the moved rows so concurrent edits can't interleave.
+    await tx
+      .select({ id: task.id })
+      .from(task)
+      .where(
+        and(
+          eq(task.boardId, boardId),
+          inArray(
+            task.id,
+            moves.map((m) => m.id),
+          ),
+        ),
+      )
+      .for("update");
+    const live = await tx
+      .select({ id: task.id, status: task.status, position: task.position })
+      .from(task)
+      .where(and(eq(task.boardId, boardId), isNull(task.deletedAt)));
+
+    const updated: Task[] = [];
+    const now = new Date();
+    for (const move of planBulkMove(live, moves)) {
+      const [row] = await tx
+        .update(task)
+        .set({ status: move.status, position: move.position, updatedAt: now })
+        .where(and(eq(task.id, move.id), eq(task.boardId, boardId)))
+        .returning();
+      updated.push(toTask(row));
+    }
+    return updated;
+  });
 }

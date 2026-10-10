@@ -74,6 +74,7 @@ export function BoardColumns() {
   const mobileStatus = useUi((s) => s.mobileStatus);
   const setDragging = useUi((s) => s.setDragging);
   const showToast = useUi((s) => s.showToast);
+  const selecting = useUi((s) => s.selecting);
   const isMobile = useIsMobile();
   const updateTask = useUpdateTask(boardId);
 
@@ -229,7 +230,7 @@ export function BoardColumns() {
               emptyLabel={over ? "Drop here" : total ? "No matching tasks" : "No tasks yet"}
               isOver={over}
               hiddenOnMobile={status.id !== mobileStatus}
-              dragDisabled={isMobile}
+              dragDisabled={isMobile || selecting}
             />
           );
         })}

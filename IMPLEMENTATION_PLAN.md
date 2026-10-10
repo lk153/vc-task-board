@@ -18,9 +18,9 @@
 | Check | Result |
 | --- | --- |
 | Lint, typecheck, Prettier, production build | Clean |
-| Unit tests (domain logic) | 25 passing |
-| Integration tests (services, permissions, invites, Better Auth sign-up) on PGlite | 36 passing |
-| End-to-end tests (Playwright, production build, desktop + mobile, axe accessibility checks) | 30 passing, stable over repeated runs |
+| Unit tests (domain logic) | 30 passing |
+| Integration tests (services, permissions, invites, bulk moves, Better Auth sign-up) on PGlite | 40 passing |
+| End-to-end tests (Playwright, production build, desktop + mobile, axe accessibility checks) | 34 passing, stable over repeated runs |
 
 **Still to do (needs your accounts)**
 
@@ -235,6 +235,7 @@ All endpoints return JSON. Errors are `{ error: { code, message } }` with status
 | GET | `/api/boards/:boardId` | member | Board + members + tasks (+ pending invites with links, for owners) |
 | PATCH / DELETE | `/api/boards/:boardId` | owner | Rename / delete the board |
 | POST | `/api/boards/:boardId/tasks` | member | Create a task |
+| PATCH | `/api/boards/:boardId/tasks` | member | Bulk status change: `{ tasks: [{ id, status, position? }] }` (≤ 500, one transaction). Without `position` a task goes to the end of its new column; Undo passes the old positions. Unknown ids are skipped |
 | PATCH | `/api/boards/:boardId/tasks/:taskId` | member | Update fields or move (`status` + `position`) |
 | DELETE | `/api/boards/:boardId/tasks/:taskId` | member | Soft delete |
 | POST | `/api/boards/:boardId/tasks/:taskId/restore` | member | Undo a delete |
@@ -296,13 +297,14 @@ Configured in `server/auth.ts`.
 | Edit | Click a card, or press `Enter`/`Space` on a focused card |
 | Delete | Trash icon on hover (desktop), **Delete** in the editor, or `Delete`/`Backspace` on a focused card → confirm (Cancel has focus) → "Task deleted" toast + **Undo** (restores the task) |
 | Toasts | One at a time. 2.8 s normally, 6 s with Undo. **(new)** On a save error: "Couldn't save — change undone" |
-| Esc | Closes, in priority order: confirm → editor → filter panel |
+| Esc | Closes, in priority order: confirm → editor → menu → selection mode → filter panel |
 | `/` | Focuses search. Shortcuts are ignored while typing or while a dialog is open |
 | Search | Case-insensitive substring match on title + description (done on the client) |
 | Filters | **(changed)** One multi-select dropdown each for Priority, Task type and Assignee (board members + Unassigned), with the same colored tags as the cards. OR within a dropdown, AND across them. Each trigger shows its selection ("High, Low") and a count; the Filter button shows the total. **Clear all**, or clear one dropdown from its menu |
-| Counts | Header shows "N tasks". A column shows "x of y" when filtered. Mobile tab counts respect filters |
+| Counts | Header shows "N tasks" (desktop; on mobile the tabs carry the counts). A column shows "x of y" when filtered. Mobile tab counts respect filters |
 | Empty states | "No tasks yet" / "No matching tasks" / "Drop here" |
 | Drag & drop | Desktop only. Move between columns + reorder; drop anywhere in a column. Column highlight, dragged card at 40% opacity (the gap where it will land shows the drop position). "Moved to {Status}" toast when the status changes |
+| **(new)** Bulk status change | **Select** in the header turns on selection mode: each card shows a checkbox and a click/tap selects it instead of opening the editor. Desktop shortcuts: Ctrl/⌘-click or **X** on a focused card. A bar (floating on desktop, at the bottom on mobile, replacing the FAB) shows "N selected", **Move to ▾** (status menu), **Select all** (visible tasks; on mobile, the current tab), **Clear** and **Done**. Moving shows "Moved N tasks to {Status}" with **Undo**, which restores each task's column and position. Selection only counts tasks you can see (filters apply); dragging is off while selecting |
 | **(new)** Keyboard move | Focus a card, press **M**, use the arrow keys, then Enter/Space to drop or Esc to cancel. Screen readers announce task and column names |
 | **(new)** Reduced motion | No slide-up, pop or fade animations when the system asks for reduced motion |
 | Mobile | Status tabs (default **To Do**), single column, FAB, editor as a bottom sheet (max 92dvh), toast sits above the FAB, no dragging |
@@ -461,6 +463,7 @@ Production goes live in **Phase 0**. Each later phase is one or more PRs, each w
 | Create via header / column / `N`; title required; all fields | 6 | `e2e/create-task.spec.ts` |
 | Edit via card click → form | 6 | `e2e/edit-task.spec.ts` |
 | Drag between columns and reorder (desktop) | 9 | `e2e/drag-drop.spec.ts` |
+| Bulk status change with Undo (desktop + mobile) | added after v1 | `e2e/bulk-status.spec.ts`, `e2e/mobile.spec.ts`, `integration/bulk-move.test.ts`, `domain/ordering.test.ts` |
 | Delete via trash / form / `Delete` key → confirm → Undo | 7 | `e2e/delete-task.spec.ts` |
 | Dark/light: system default, remembered | 1 | `e2e/theme.spec.ts` |
 | Mobile < 720px: tabs, FAB, bottom sheet, no drag, status via form | 5, 6, 9 | `e2e/mobile.spec.ts` (mobile project) |

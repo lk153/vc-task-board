@@ -14,6 +14,7 @@ import { TaskEditor } from "../task-editor/task-editor";
 import { useBoard } from "./api";
 import { BoardContext, type Me } from "./board-context";
 import { BoardColumns } from "./board-columns";
+import { BulkBar } from "./bulk-bar";
 import { Fab } from "./fab";
 import { FilterBar } from "./filter-bar";
 import { Header } from "./header";
@@ -80,6 +81,7 @@ export function BoardApp({
         <StatusTabs />
         <BoardColumns />
         <Fab />
+        <BulkBar />
       </div>
       <TaskEditor />
       <DeleteTaskDialog />

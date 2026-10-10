@@ -6,6 +6,8 @@ import { useUi } from "@/store/ui-store";
 /** Mobile only: floating "+" that creates a task in the selected status. */
 export function Fab() {
   const openCreate = useUi((s) => s.openCreate);
+  const selecting = useUi((s) => s.selecting);
+  if (selecting) return null;
   return (
     <button
       type="button"

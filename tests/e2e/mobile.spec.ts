@@ -52,4 +52,35 @@ test.describe("mobile layout (< 720px)", () => {
       .click();
     await expect(card(page, "Finish on phone")).toBeVisible();
   });
+
+  test("select several tasks and change their status at once", async ({ page }) => {
+    for (const title of ["Phone A", "Phone B"]) {
+      await page.getByRole("button", { name: "New task", exact: true }).click();
+      await fillTask(page, { title });
+      await editor(page).getByRole("button", { name: "Create task" }).click();
+      await expect(card(page, title)).toBeVisible();
+    }
+
+    await page.getByRole("button", { name: "Select tasks" }).click();
+    await expect(page.getByRole("button", { name: "New task", exact: true })).toBeHidden(); // FAB
+    await card(page, "Phone A").click();
+    await card(page, "Phone B").click();
+    const bar = page.getByRole("toolbar", { name: "Selected tasks" });
+    await expect(bar).toContainText("2 selected");
+    await expectAccessible(page);
+
+    await bar.getByRole("button", { name: "Move to" }).click();
+    await page.getByRole("menuitem", { name: "In Progress" }).click();
+    await expect(page.getByRole("status", { name: "Notifications" })).toContainText(
+      "Moved 2 tasks to In Progress",
+    );
+    await expect(card(page, "Phone A")).toBeHidden();
+
+    await page
+      .getByRole("navigation", { name: "Status" })
+      .getByRole("button", { name: /In Progress/ })
+      .click();
+    await expect(card(page, "Phone A")).toBeVisible();
+    await expect(card(page, "Phone B")).toBeVisible();
+  });
 });

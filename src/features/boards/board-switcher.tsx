@@ -68,7 +68,7 @@ export function BoardSwitcher() {
           )}
         </MenuPanel>
       </DropdownMenu.Root>
-      <span className="text-[13px] whitespace-nowrap text-muted">
+      <span className="text-[13px] whitespace-nowrap text-muted max-desk:hidden">
         {total} task{total === 1 ? "" : "s"}
       </span>
     </div>

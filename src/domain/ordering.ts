@@ -1,4 +1,4 @@
-import { generateKeyBetween } from "fractional-indexing";
+import { generateKeyBetween, generateNKeysBetween } from "fractional-indexing";
 import type { Status, Task } from "./task";
 
 /**
@@ -47,4 +47,54 @@ export function positionForMove(
   const before = others[clamped - 1]?.position ?? null;
   const after = others[clamped]?.position ?? null;
   return positionBetween(before, after);
+}
+
+export interface TaskMove {
+  id: string;
+  status: Status;
+  /** Exact position (used by Undo). Without it the task goes to the end of `status`. */
+  position?: string;
+}
+
+export interface PlannedMove {
+  id: string;
+  status: Status;
+  position: string;
+}
+
+/**
+ * Where each task in a bulk move ends up. Shared by the client (optimistic
+ * update) and the server, so both compute the same positions.
+ *
+ * - With `position`: the task goes exactly there (Undo restores this way).
+ * - Without: the task is appended to the end of the target column, in the
+ *   order given. Tasks already in that column stay where they are.
+ * - Ids not found in `tasks` (deleted, or another board) are skipped.
+ */
+export function planBulkMove(
+  tasks: readonly Pick<Task, "id" | "status" | "position">[],
+  moves: readonly TaskMove[],
+): PlannedMove[] {
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+  const planned: PlannedMove[] = [];
+  const appendTo = new Map<Status, string[]>();
+
+  for (const move of moves) {
+    const current = byId.get(move.id);
+    if (!current) continue;
+    if (move.position) {
+      planned.push({ id: move.id, status: move.status, position: move.position });
+    } else if (current.status !== move.status) {
+      appendTo.set(move.status, [...(appendTo.get(move.status) ?? []), move.id]);
+    }
+  }
+
+  const leaving = new Set([...appendTo.values()].flat());
+  for (const [status, ids] of appendTo) {
+    const staying = tasks.filter((t) => t.status === status && !leaving.has(t.id));
+    const last = sortTasks(staying).at(-1)?.position ?? null;
+    const keys = generateNKeysBetween(last, null, ids.length);
+    ids.forEach((id, i) => planned.push({ id, status, position: keys[i] }));
+  }
+  return planned;
 }
