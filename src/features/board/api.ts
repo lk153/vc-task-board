@@ -9,7 +9,14 @@ import {
 } from "@tanstack/react-query";
 import { POLL_MS } from "@/config/board";
 import { planBulkMove, positionAtEnd, sortTasks, type TaskMove } from "@/domain/ordering";
-import type { BoardSummary, BoardView, Invite, Task, UpdateTaskInput } from "@/domain/task";
+import type {
+  BoardStatus,
+  BoardSummary,
+  BoardView,
+  Invite,
+  Task,
+  UpdateTaskInput,
+} from "@/domain/task";
 import { api, ApiError } from "@/lib/api-client";
 import { useUi } from "@/store/ui-store";
 
@@ -116,7 +123,7 @@ export function useCreateTask(boardId: string) {
           id: task.id,
           title: task.title,
           description: task.description,
-          status: task.status,
+          statusId: task.statusId,
           priority: task.priority,
           type: task.type,
           assigneeId: task.assigneeId,
@@ -128,7 +135,7 @@ export function useCreateTask(boardId: string) {
   });
 }
 
-/** Update fields and/or move (`status` + `position`). Send only what changed. */
+/** Update fields and/or move (`statusId` + `position`). Send only what changed. */
 export function useUpdateTask(boardId: string) {
   return useBoardMutation(boardId, {
     mutationFn: ({ taskId, patch }: { taskId: string; patch: UpdateTaskInput }) =>
@@ -136,11 +143,11 @@ export function useUpdateTask(boardId: string) {
     apply: (view, { taskId, patch }) => {
       const current = view.tasks.find((t) => t.id === taskId);
       if (!current) return view;
-      const movedColumn = patch.status && patch.status !== current.status;
+      const movedColumn = patch.statusId && patch.statusId !== current.statusId;
       const position =
         patch.position ??
         (movedColumn
-          ? positionAtEnd(view.tasks.filter((t) => t.status === patch.status))
+          ? positionAtEnd(view.tasks.filter((t) => t.statusId === patch.statusId))
           : current.position);
       return replaceTask(view, { ...current, ...patch, position });
     },
@@ -178,12 +185,82 @@ export function useBulkMoveTasks(boardId: string) {
         tasks: sortTasks(
           view.tasks.map((t) => {
             const move = plan.get(t.id);
-            return move ? { ...t, status: move.status, position: move.position } : t;
+            return move ? { ...t, statusId: move.statusId, position: move.position } : t;
           }),
         ),
       };
     },
     settle: (view, saved) => saved.reduce(replaceTask, view),
+  });
+}
+
+// ─── Statuses (columns) ─────────────────────────────────────────────────────
+
+const statusesInOrder = (statuses: BoardStatus[]) => sortTasks(statuses);
+
+export function useCreateStatus(boardId: string) {
+  return useBoardMutation(boardId, {
+    mutationFn: (input: Pick<BoardStatus, "name" | "tone">) =>
+      api<BoardStatus>(`/api/boards/${boardId}/statuses`, { method: "POST", body: input }),
+    settle: (view, created) => ({
+      ...view,
+      statuses: statusesInOrder([...view.statuses.filter((s) => s.id !== created.id), created]),
+    }),
+  });
+}
+
+export type StatusPatch = Partial<Pick<BoardStatus, "name" | "tone" | "position">> & {
+  isDefault?: true;
+};
+
+/** Rename, recolor, move, or make it the column for new tasks. */
+export function useUpdateStatus(boardId: string) {
+  return useBoardMutation(boardId, {
+    mutationFn: ({ statusId, patch }: { statusId: string; patch: StatusPatch }) =>
+      api<BoardStatus>(`/api/boards/${boardId}/statuses/${statusId}`, {
+        method: "PATCH",
+        body: patch,
+      }),
+    apply: (view, { statusId, patch }) => ({
+      ...view,
+      statuses: statusesInOrder(
+        view.statuses.map((s) =>
+          s.id === statusId ? { ...s, ...patch } : patch.isDefault ? { ...s, isDefault: false } : s,
+        ),
+      ),
+    }),
+  });
+}
+
+/** Remove a column; its tasks move to `moveTo` (appended), which also inherits "default". */
+export function useDeleteStatus(boardId: string) {
+  return useBoardMutation(boardId, {
+    mutationFn: ({ statusId, moveTo }: { statusId: string; moveTo: string | null }) =>
+      api<void>(`/api/boards/${boardId}/statuses/${statusId}${moveTo ? `?moveTo=${moveTo}` : ""}`, {
+        method: "DELETE",
+      }),
+    apply: (view, { statusId, moveTo }) => {
+      const removed = view.statuses.find((s) => s.id === statusId);
+      const remaining = view.statuses.filter((s) => s.id !== statusId);
+      const heir = remaining.find((s) => s.id === moveTo) ?? remaining[0];
+      const moves = view.tasks
+        .filter((t) => t.statusId === statusId && moveTo)
+        .sort((a, b) => (a.position < b.position ? -1 : 1))
+        .map((t) => ({ id: t.id, statusId: moveTo! }));
+      const plan = new Map(planBulkMove(view.tasks, moves).map((m) => [m.id, m]));
+      return {
+        ...view,
+        statuses: remaining.map((s) =>
+          removed?.isDefault && s.id === heir?.id ? { ...s, isDefault: true } : s,
+        ),
+        tasks: sortTasks(
+          view.tasks.map((t) => {
+            const move = plan.get(t.id);
+            return move ? { ...t, statusId: move.statusId, position: move.position } : t;
+          }),
+        ),
+      };
+    },
   });
 }
 

@@ -5,7 +5,7 @@ import { createTaskSchema, inviteSchema, updateTaskSchema } from "./task";
 describe("task schemas", () => {
   const valid = {
     title: "Ship it",
-    status: "todo",
+    statusId: "6f1c2b9e-3a4d-4e5f-8a9b-0c1d2e3f4a5b",
     priority: "medium",
     type: null,
     assigneeId: null,
@@ -19,8 +19,8 @@ describe("task schemas", () => {
     });
   });
 
-  it("rejects unknown statuses, priorities and types", () => {
-    expect(createTaskSchema.safeParse({ ...valid, status: "blocked" }).success).toBe(false);
+  it("rejects malformed status ids, unknown priorities and types", () => {
+    expect(createTaskSchema.safeParse({ ...valid, statusId: "blocked" }).success).toBe(false);
     expect(createTaskSchema.safeParse({ ...valid, priority: "urgent" }).success).toBe(false);
     expect(createTaskSchema.safeParse({ ...valid, type: "epic" }).success).toBe(false);
   });

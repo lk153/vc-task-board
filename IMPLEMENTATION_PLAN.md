@@ -19,8 +19,8 @@
 | --- | --- |
 | Lint, typecheck, Prettier, production build | Clean |
 | Unit tests (domain logic) | 30 passing |
-| Integration tests (services, permissions, invites, bulk moves, Better Auth sign-up) on PGlite | 40 passing |
-| End-to-end tests (Playwright, production build, desktop + mobile, axe accessibility checks) | 34 passing, stable over repeated runs |
+| Integration tests (services, permissions, invites, bulk moves, statuses, Better Auth sign-up) on PGlite | 52 passing |
+| End-to-end tests (Playwright, production build, desktop + mobile, axe accessibility checks) | 38 passing, stable over repeated runs |
 
 **Still to do (needs your accounts)**
 
@@ -43,11 +43,18 @@
 | Local database | Postgres in Docker on port 5434 (`pnpm db:up`); e2e tests use a separate `taskboard_e2e` database. pgAdmin (`pnpm db:admin`, http://localhost:5050) browses it with no login, bound to localhost only. |
 | Sign-up and existing emails | Sign-up says when an email is already registered. Without email confirmation this can't be hidden; rate limits and BotID slow down anyone probing. |
 
+**Added after v1**
+
+| Feature | Notes |
+| --- | --- |
+| Bulk status change | Select several tasks and move them to a status at once, with Undo (§3.7). |
+| Per-board statuses | Columns are rows in `board_status`, managed by the board's owner: add, rename, recolor, reorder, choose the status for new tasks, delete (its tasks move to a status the owner picks). This release breaks the expand → contract rule once; see §4 step 7. |
+
 ---
 
 ## 1. Summary
 
-A Kanban board (Backlog → To Do → In Progress → In Review → Done) for teams. It has create/edit/delete, drag & drop, search, filters, dark mode and a mobile layout.
+A Kanban board for teams. Each column is a status; a new board starts with Backlog → To Do → In Progress → In Review → Done, and its owner can add, edit, reorder and remove statuses. It has create/edit/delete, drag & drop, search, filters, dark mode and a mobile layout.
 
 - **Sign in** with Google, or with email and password. Anyone can sign up.
 - Each person can have **several boards**. An owner **shares a board by inviting an email address**: the app creates an **invite link**, and the owner copies it and sends it themselves.
@@ -76,7 +83,7 @@ See [§9 Roadmap](#9-roadmap).
 | Layer | Choice | Why |
 | --- | --- | --- |
 | Framework | **Next.js 16** (App Router, Cache Components) + **React 19** | Vercel detects it with no config. Server Components load the board on the server (streamed into a static shell), Route Handlers serve the API, and `proxy.ts` redirects signed-out users. |
-| Language | **TypeScript** (`strict`) | Types are shared by client and server. Adding a status or type causes a compile error everywhere it must be handled. |
+| Language | **TypeScript** (`strict`) | Types are shared by client and server. Adding a priority or task type causes a compile error everywhere it must be handled. |
 | Database | **Neon Postgres** via the Vercel Marketplace | Serverless Postgres. `DATABASE_URL` is added to the Vercel project automatically, and each Preview deployment gets its own copy of the database. |
 | ORM & migrations | **Drizzle ORM** + **drizzle-kit**, `pg` driver with `attachDatabasePool` (`@vercel/functions`) | Typed queries, and migrations are plain SQL files committed to the repo. The standard driver works with Neon, the CI Postgres container and local Postgres. |
 | Auth | **Better Auth**: Google OAuth, email & password, `oAuthProxy` and `captcha` plugins, `@better-auth/drizzle-adapter` | One library covers both sign-in methods. Users and sessions are stored in our own Postgres, with no per-user fees. Rate limiting and password hashing are built in. The Auth.js maintainers now recommend Better Auth for new projects. |
@@ -128,7 +135,7 @@ See [§9 Roadmap](#9-roadmap).
 2. **Components never call `fetch` directly.** They use the query and mutation hooks in `features/*/api.ts`, or the Better Auth client.
 3. **`domain/` is pure and shared.** The same Zod schema checks the editor form and the API body.
 4. **`server/**` imports `server-only`**, so database code and secrets can't end up in the browser bundle.
-5. **Board vocabulary** (statuses, priorities, types, tones, timings, limits) is defined in **one** file: `src/config/board.ts`. Assignees are board members, not a hardcoded list.
+5. **Board vocabulary** (priorities, types, tones, timings, limits, and the statuses a new board starts with) is defined in **one** file: `src/config/board.ts`. Statuses themselves are per-board rows (§3.4), and assignees are board members; neither is a hardcoded list.
 
 ### 3.2 Folder structure
 
@@ -149,17 +156,18 @@ src/
 │       ├── auth/[...all]/route.ts   # Better Auth handler
 │       ├── boards/**/route.ts       # REST API (§3.5)
 │       └── invites/[token]/accept/route.ts
-├── config/board.ts                  # STATUSES, PRIORITIES, TASK_TYPES, TONES, BREAKPOINT, TOAST_MS, POLL_MS, INVITE_TTL_DAYS, LIMITS
+├── config/board.ts                  # DEFAULT_STATUSES, PRIORITIES, TASK_TYPES, TONES, BREAKPOINT, TOAST_MS, POLL_MS, INVITE_TTL_DAYS, LIMITS
 ├── domain/                          # task.ts (types + Zod), filter.ts, ordering.ts, tone.ts (+ unit tests)
 ├── server/                          # server-only
 │   ├── auth.ts                      # Better Auth config (§3.6)
 │   ├── config.ts                    # feature switches from env (googleEnabled)
 │   ├── errors.ts, http.ts           # HttpError helpers; requireSession(), route() wrapper → JSON errors
 │   ├── db/                          # client.ts (pg Pool + Drizzle), schema.ts, migrations/
-│   └── services/                    # access.ts, boards.ts, tasks.ts, members.ts, invites.ts, accounts.ts
+│   └── services/                    # access.ts, boards.ts, statuses.ts, tasks.ts, members.ts, invites.ts, accounts.ts
 ├── features/
 │   ├── auth/auth-forms.tsx          # SignInForm, SignUpForm, Google button
-│   ├── board/                       # BoardApp, Header, FilterBar, StatusTabs, BoardColumns (dnd), Column, TaskCard, Fab, api.ts, hotkeys
+│   ├── board/                       # BoardApp, Header, FilterBar, StatusTabs, BoardColumns (dnd), Column, TaskCard, Fab, BulkBar, api.ts, hotkeys
+│   ├── statuses/                    # StatusMenu (column ⋯), StatusDialogs (add / edit / delete), TonePicker
 │   ├── task-editor/                 # TaskEditor (dialog / bottom sheet), PriorityPicker
 │   ├── task-delete/                 # DeleteTaskDialog (confirm + Undo)
 │   ├── boards/                      # BoardSwitcher, BoardDialogs (new / rename / delete)
@@ -183,7 +191,7 @@ Makefile                             # shortcuts for every command (`make help`)
 - **First load:** `/b/[boardId]` is a dynamic Server Component. It checks the session and membership, then loads the board, members and tasks in one go and passes them to the client as TanStack Query `initialData`. The full board is in the first HTML, with no spinner. A non-member gets **404**, so we don't reveal that the board exists.
 - **Changes:** update the cache optimistically → call the API → on error, roll back and show a toast ("Couldn't save — change undone") → refetch the board when the request finishes.
 - **Seeing other people's changes:** refetch when the window regains focus, and every `POLL_MS` (15 s) while the tab is visible. Polling pauses during a drag. Live push is on the roadmap.
-- **Edits at the same time:** `PATCH` sends only the fields that changed, and for each field the last write wins. A move only touches the moved task's `status` and `position`.
+- **Edits at the same time:** `PATCH` sends only the fields that changed, and for each field the last write wins. A move only touches the moved task's `status_id` and `position`.
 - **Theme:** an inline `<head>` script reads the `tb-theme` cookie and sets `data-theme` before first paint. With no cookie, CSS `light-dark()` follows the system setting. The toggle writes the cookie.
 - **Signing in or out** does a full page load, so nothing cached or prefetched under the previous session is reused.
 
@@ -209,10 +217,19 @@ board_invite                                  UNIQUE (board_id, email) WHERE acc
   invited_by → user · created_at · expires_at (created_at + INVITE_TTL, 7 days)
   accepted_at NULL · accepted_by → user NULL
 
-task                                          INDEX (board_id, status, position) WHERE deleted_at IS NULL
+board_status                                  a board's columns, left to right; INDEX (board_id, position)
+  id uuid PK · board_id → board ON DELETE CASCADE
+  name text (1–40)                            UNIQUE (board_id, lower(name))
+  tone text                                   one of the 13 color tones
+  position text COLLATE "C"                   fractional-indexing key, like cards
+  is_default bool                             the column for new tasks; UNIQUE (board_id) WHERE is_default
+  created_at · updated_at
+
+task                                          INDEX (board_id, status_id, position) WHERE deleted_at IS NULL
   id uuid PK · board_id → board ON DELETE CASCADE
   title text (1–200) · description text (≤ 5000, default '')
-  status · priority · type NULL               text; allowed values come from config/board.ts, checked by Zod
+  status_id → board_status ON DELETE RESTRICT must be a status of the same board
+  priority · type NULL                        text; allowed values come from config/board.ts, checked by Zod
   assignee_id → user NULL                     must be a member of the board
   points real NULL                            ≥ 0, step 0.5
   position text COLLATE "C"                   fractional-indexing key (byte order is required)
@@ -220,8 +237,10 @@ task                                          INDEX (board_id, status, position)
   deleted_at NULL                             soft delete, so Undo works for everyone
 ```
 
-- Statuses, priorities and types are `text`, not Postgres enums. Adding a value is then a config change with no migration.
-- Defaults on create: status = the column you clicked, priority `medium`, type `tech`, unassigned, `position` = after the last card in that column.
+- Priorities and types are `text`, not Postgres enums. Adding a value is then a config change with no migration.
+- Statuses are rows, so owners change them in the app. A new board gets `DEFAULT_STATUSES` (Backlog, To Do, In Progress, In Review, Done; To Do is the default). A board has 1–15 statuses.
+- Deleting a status moves its tasks, including soft-deleted ones (so Undo still works), to another status first. `ON DELETE RESTRICT` makes sure no task is ever left without one.
+- Defaults on create: status = the column you clicked (or the board's default status), priority `medium`, type `tech`, unassigned, `position` = after the last card in that column.
 - Soft-deleted tasks are hidden everywhere. Purging them permanently is on the roadmap.
 
 ### 3.5 API
@@ -232,13 +251,16 @@ All endpoints return JSON. Errors are `{ error: { code, message } }` with status
 | --- | --- | --- | --- |
 | GET | `/api/boards` | signed in | Boards I'm a member of |
 | POST | `/api/boards` | signed in | Create a board (creator becomes owner) |
-| GET | `/api/boards/:boardId` | member | Board + members + tasks (+ pending invites with links, for owners) |
+| GET | `/api/boards/:boardId` | member | Board + statuses + members + tasks (+ pending invites with links, for owners) |
 | PATCH / DELETE | `/api/boards/:boardId` | owner | Rename / delete the board |
 | POST | `/api/boards/:boardId/tasks` | member | Create a task |
-| PATCH | `/api/boards/:boardId/tasks` | member | Bulk status change: `{ tasks: [{ id, status, position? }] }` (≤ 500, one transaction). Without `position` a task goes to the end of its new column; Undo passes the old positions. Unknown ids are skipped |
-| PATCH | `/api/boards/:boardId/tasks/:taskId` | member | Update fields or move (`status` + `position`) |
+| PATCH | `/api/boards/:boardId/tasks` | member | Bulk status change: `{ tasks: [{ id, statusId, position? }] }` (≤ 500, one transaction). Without `position` a task goes to the end of its new column; Undo passes the old positions. Unknown ids are skipped |
+| PATCH | `/api/boards/:boardId/tasks/:taskId` | member | Update fields or move (`statusId` + `position`) |
 | DELETE | `/api/boards/:boardId/tasks/:taskId` | member | Soft delete |
 | POST | `/api/boards/:boardId/tasks/:taskId/restore` | member | Undo a delete |
+| POST | `/api/boards/:boardId/statuses` | owner | Add a status `{ name, tone }` at the end. 409 if the name is taken (any capitalisation), 422 past 15 |
+| PATCH | `/api/boards/:boardId/statuses/:statusId` | owner | Rename, recolor, move (`position`), or `isDefault: true` |
+| DELETE | `/api/boards/:boardId/statuses/:statusId?moveTo=<statusId>` | owner | Delete a status. Its tasks are appended to `moveTo` (required if it has any). 409 for the last status |
 | POST | `/api/boards/:boardId/invites` | owner | Create an invite for an email. Returns the invite link |
 | DELETE | `/api/boards/:boardId/invites/:inviteId` | owner | Cancel an invite |
 | DELETE | `/api/boards/:boardId/members/:userId` | owner, or yourself (leave) | Remove a member or leave the board |
@@ -278,7 +300,7 @@ Configured in `server/auth.ts`.
 3. **Accept:** the recipient opens the link and signs in or signs up. If the signed-in account's email **matches** the invite, they join and land on the board. Both the secret link **and** the matching email are needed, so a forwarded link alone isn't enough.
    - Otherwise they see a clear error: wrong account ("This invite is for a•••@company.com"), expired (after 7 days), already used, or cancelled.
 4. **Roles:**
-   - **Owner:** rename or delete the board, invite and remove members, cancel invites.
+   - **Owner:** rename or delete the board, manage its statuses, invite and remove members, cancel invites.
    - **Member:** every task action, and leaving the board.
    - A board always has at least one owner.
 5. **Assignees** are the board's members. Removing someone unassigns their tasks on that board.
@@ -291,7 +313,7 @@ Configured in `server/auth.ts`.
 | --- | --- |
 | Breakpoint | `< 720px` = mobile |
 | Create entry points | Header **New task** (desktop), column **+** and **Add task**, **FAB** (mobile), `N` key |
-| Create defaults | Status = clicked column, or `todo` (desktop header / `N`), or the active tab (mobile). Priority `medium`, type `tech` |
+| Create defaults | Status = clicked column, or the board's default status (desktop header / `N`), or the active tab (mobile). Priority `medium`, type `tech` |
 | Validation | Empty title → inline "Give the task a title." and focus moves to the title. Negative or NaN points → `null`. The server applies the same rules |
 | Save | Button, or `⌘/Ctrl+Enter`. Toasts: "Task created in {Status}" / "Changes saved". On mobile, the tab switches to the new task's status |
 | Edit | Click a card, or press `Enter`/`Space` on a focused card |
@@ -305,9 +327,10 @@ Configured in `server/auth.ts`.
 | Empty states | "No tasks yet" / "No matching tasks" / "Drop here" |
 | Drag & drop | Desktop only. Move between columns + reorder; drop anywhere in a column. Column highlight, dragged card at 40% opacity (the gap where it will land shows the drop position). "Moved to {Status}" toast when the status changes |
 | **(new)** Bulk status change | **Select** in the header turns on selection mode: each card shows a checkbox and a click/tap selects it instead of opening the editor. Desktop shortcuts: Ctrl/⌘-click or **X** on a focused card. A bar (floating on desktop, at the bottom on mobile, replacing the FAB) shows "N selected", **Move to ▾** (status menu), **Select all** (visible tasks; on mobile, the current tab), **Clear** and **Done**. Moving shows "Moved N tasks to {Status}" with **Undo**, which restores each task's column and position. Selection only counts tasks you can see (filters apply); dragging is off while selecting |
+| **(new)** Manage statuses | Owners only. Desktop: a **⋯** menu on each column header (**Edit status**, **Move left** / **Move right**, **Use for new tasks**, **Delete status**) and a dashed **Add status** button after the last column. Mobile: **⋯** (for the current tab) and **+** next to the tabs. Add/Edit dialog: name (1–40, unique on the board), color swatches, a preview tag, and in Edit a "Use for new tasks" checkbox. Delete dialog: "The “X” column will be removed from the board for everyone", plus "Move its N tasks to ▾" when it has tasks; toast "Deleted “X” · N tasks moved to “Y”". **Delete status** is disabled for the last status. Changes are optimistic, and other members see them on the next refresh |
 | **(new)** Keyboard move | Focus a card, press **M**, use the arrow keys, then Enter/Space to drop or Esc to cancel. Screen readers announce task and column names |
 | **(new)** Reduced motion | No slide-up, pop or fade animations when the system asks for reduced motion |
-| Mobile | Status tabs (default **To Do**), single column, FAB, editor as a bottom sheet (max 92dvh), toast sits above the FAB, no dragging |
+| Mobile | Status tabs (default: the board's default status), single column, FAB, editor as a bottom sheet (max 92dvh), toast sits above the FAB, no dragging |
 | Overlay | Clicking outside closes the editor only if the mouse-down also started outside |
 | Card display | Title, one-line description preview, points (2 decimals), assignee/priority/type tags, colored bottom border by status |
 | Assignee tag color | **(new)** The design hardcodes a color per person. We pick each member's color from the tone palette using a hash of their user id, so it's the same everywhere |
@@ -337,6 +360,7 @@ Configured in `server/auth.ts`.
 
 6. **Google OAuth:** register only `https://<prod-domain>/api/auth/callback/google` and the localhost callback. Preview deployments sign in through Better Auth's `oAuthProxy`, which sends the login through Production and back. Add the preview URL pattern to `trustedOrigins`. Don't expose the proxy secret to previews built from forks.
 7. **Migrations must be expand → contract.** Never drop or rename a column in the same deploy that stops using it. Vercel's *Instant Rollback* runs old code against the new schema, so every migration must work with the previous release.
+   - **Exception: the per-board statuses release** (`0001_board_statuses`, `0002_drop_task_status_key`). It replaces `task.status` with `task.status_id`. Doing it in two steps would have needed triggers to keep both columns in sync, which isn't worth it at this stage, so older code can't run against the new schema. While that deployment builds, the live older version shows errors for a minute or two, and Instant Rollback to a deployment from before it doesn't work. Deploy it when nobody is using the board. To go back, restore the Neon branch to a point before the deploy, then roll back in Vercel. The migration was checked on copies of real data: every task stays in the same column.
 8. **Security headers** in `next.config.ts`: `X-Content-Type-Options`, `Referrer-Policy: same-origin` (so invite tokens in the URL aren't sent to other sites), `Permissions-Policy`, CSP `frame-ancestors 'none'`.
 9. **Local development:** `pnpm db:up` (Postgres in Docker on port 5434) or `vercel env pull .env.local` (a Neon dev branch) → `pnpm db:migrate && pnpm db:seed && pnpm dev`. See [README.md](README.md).
 10. **Maintainer tools:** run `pnpm user:admin <command> <email>` locally with the Production `DATABASE_URL` (pulled with `vercel env pull --environment=production`). Only maintainers have access.
@@ -464,6 +488,7 @@ Production goes live in **Phase 0**. Each later phase is one or more PRs, each w
 | Edit via card click → form | 6 | `e2e/edit-task.spec.ts` |
 | Drag between columns and reorder (desktop) | 9 | `e2e/drag-drop.spec.ts` |
 | Bulk status change with Undo (desktop + mobile) | added after v1 | `e2e/bulk-status.spec.ts`, `e2e/mobile.spec.ts`, `integration/bulk-move.test.ts`, `domain/ordering.test.ts` |
+| Statuses: owners add, edit, reorder and delete them; deleting removes the column and moves its tasks (desktop + mobile) | added after v1 | `e2e/statuses.spec.ts`, `e2e/mobile.spec.ts`, `integration/statuses.test.ts` |
 | Delete via trash / form / `Delete` key → confirm → Undo | 7 | `e2e/delete-task.spec.ts` |
 | Dark/light: system default, remembered | 1 | `e2e/theme.spec.ts` |
 | Mobile < 720px: tabs, FAB, bottom sheet, no drag, status via form | 5, 6, 9 | `e2e/mobile.spec.ts` (mobile project) |
@@ -491,7 +516,8 @@ Production goes live in **Phase 0**. Each later phase is one or more PRs, each w
 
 | To… | Change |
 | --- | --- |
-| Add a status / priority / task type | Add an entry to `src/config/board.ts`. TypeScript flags the rest. No migration is needed, because these are `text` columns. To **remove** a value, first migrate the rows that use it. |
+| Add, rename or remove a status | Nothing to code: the board's owner does it in the app. To change the statuses **new boards** start with, edit `DEFAULT_STATUSES` in `src/config/board.ts` (existing boards keep theirs). |
+| Add a priority / task type | Add an entry to `src/config/board.ts`. TypeScript flags the rest. No migration is needed, because these are `text` columns. To **remove** a value, first migrate the rows that use it. |
 | Change the database schema | Edit `server/db/schema.ts` → `pnpm db:generate` → review and commit the SQL → it runs on the next deploy. Follow expand → contract. |
 | Add an API endpoint | Route Handler (session + Zod) → service function (`requireMember` + rules) → integration test with permission cases → a hook in `features/*/api.ts`. |
 | Add a sign-in provider (GitHub, Microsoft…) | Add it in `server/auth.ts`, add its keys as environment variables, add a button in `features/auth`, and allow it in **Connect** in the user menu. |
@@ -533,7 +559,7 @@ Production goes live in **Phase 0**. Each later phase is one or more PRs, each w
 | Google login on changing Preview URLs | Better Auth `oAuthProxy` with the same `OAUTH_PROXY_SECRET` in Production and Preview. Only trusted previews get the secret. |
 | Relying on `proxy.ts` alone for access control is unsafe | `proxy.ts` only redirects. Every service checks the session and membership, and every route has a permission test. |
 | Two people editing at the same time | `PATCH` only sends changed fields, so the last write wins per field. 15 s polling plus refetch on focus keeps boards fresh. Live push is on the roadmap. |
-| Rollback while the schema has changed | Migrations are expand → contract, so the previous release always works with the current schema. |
+| Rollback while the schema has changed | Migrations are expand → contract, so the previous release always works with the current schema. The one exception is the per-board statuses release (§4 step 7): roll that back by restoring the Neon branch to before the deploy. |
 | Region | Vercel's default `iad1` + Neon `aws-us-east-1`, kept together to avoid slow cross-region database calls. Users far from US East see roughly 150–250 ms extra on each request. Changing region later is a documented move (§8). |
 | Neon scale-to-zero cold start | The first request after idle is slower. Turn off scale-to-zero on the Production branch if that's noticeable. |
 | Card order keys | Fractional string keys never need renumbering. The column must use `COLLATE "C"`, and ties are broken by `id`. |

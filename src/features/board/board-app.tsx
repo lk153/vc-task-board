@@ -3,16 +3,17 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo } from "react";
 import { COOKIES } from "@/config/board";
-import type { BoardSummary, BoardView } from "@/domain/task";
+import { defaultStatus, type BoardSummary, type BoardView } from "@/domain/task";
 import { ApiError } from "@/lib/api-client";
 import { useUi } from "@/store/ui-store";
 import { ChangePasswordDialog } from "../account/change-password-dialog";
 import { BoardDialogs } from "../boards/board-dialogs";
 import { ShareDialog } from "../sharing/share-dialog";
+import { StatusDialogs } from "../statuses/status-dialogs";
 import { DeleteTaskDialog } from "../task-delete/delete-task-dialog";
 import { TaskEditor } from "../task-editor/task-editor";
 import { useBoard } from "./api";
-import { BoardContext, type Me } from "./board-context";
+import { BoardContext, useBoardContext, type Me } from "./board-context";
 import { BoardColumns } from "./board-columns";
 import { BulkBar } from "./bulk-bar";
 import { Fab } from "./fab";
@@ -56,8 +57,6 @@ export function BoardApp({
     }
   }, [error, boardId, router]);
 
-  useBoardHotkeys();
-
   const context = useMemo(
     () => ({
       boardId,
@@ -66,6 +65,9 @@ export function BoardApp({
       me,
       isOwner: view.board.role === "owner",
       membersById: new Map(view.members.map((m) => [m.userId, m])),
+      statuses: view.statuses,
+      statusesById: new Map(view.statuses.map((s) => [s.id, s])),
+      defaultStatusId: defaultStatus(view.statuses)?.id ?? "",
       providers,
       googleEnabled,
     }),
@@ -82,12 +84,22 @@ export function BoardApp({
         <BoardColumns />
         <Fab />
         <BulkBar />
+        <BoardHotkeys />
       </div>
       <TaskEditor />
       <DeleteTaskDialog />
       <ShareDialog />
       <BoardDialogs />
       <ChangePasswordDialog />
+      <StatusDialogs />
     </BoardContext>
   );
+}
+
+/** Keyboard shortcuts; needs the board's columns for N. */
+function BoardHotkeys() {
+  const { defaultStatusId, statusesById } = useBoardContext();
+  const statusIds = useMemo(() => new Set(statusesById.keys()), [statusesById]);
+  useBoardHotkeys(defaultStatusId, statusIds);
+  return null;
 }

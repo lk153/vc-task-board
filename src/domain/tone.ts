@@ -1,5 +1,5 @@
-import { ASSIGNEE_TONES, PRIORITIES, STATUSES, TASK_TYPES, type Tone } from "@/config/board";
-import type { Priority, Status, TaskType } from "./task";
+import { ASSIGNEE_TONES, PRIORITIES, TASK_TYPES, type Tone } from "@/config/board";
+import type { Priority, TaskType } from "./task";
 
 /** Stable color for a board member, so the same person looks the same everywhere. */
 export function assigneeTone(userId: string): Tone {
@@ -8,7 +8,6 @@ export function assigneeTone(userId: string): Tone {
   return ASSIGNEE_TONES[hash % ASSIGNEE_TONES.length];
 }
 
-export const statusTone = (id: Status): Tone => STATUSES.find((s) => s.id === id)?.tone ?? "gray";
 export const priorityTone = (id: Priority): Tone =>
   PRIORITIES.find((p) => p.id === id)?.tone ?? "gray";
 export const typeTone = (id: TaskType): Tone => TASK_TYPES.find((t) => t.id === id)?.tone ?? "gray";

@@ -1,5 +1,5 @@
 import { generateKeyBetween, generateNKeysBetween } from "fractional-indexing";
-import type { Status, Task } from "./task";
+import type { Task } from "./task";
 
 /**
  * Card order within a column is a fractional-indexing key compared by byte
@@ -15,8 +15,11 @@ export function sortTasks<T extends Pick<Task, "position" | "id">>(tasks: readon
   return [...tasks].sort(compareTasks);
 }
 
-export function columnTasks(tasks: readonly Task[], status: Status): Task[] {
-  return sortTasks(tasks.filter((task) => task.status === status));
+export function columnTasks<T extends Pick<Task, "statusId" | "position" | "id">>(
+  tasks: readonly T[],
+  statusId: string,
+): T[] {
+  return sortTasks(tasks.filter((task) => task.statusId === statusId));
 }
 
 /** A key that sorts between `before` and `after` (either may be null for an open end). */
@@ -51,14 +54,14 @@ export function positionForMove(
 
 export interface TaskMove {
   id: string;
-  status: Status;
+  statusId: string;
   /** Exact position (used by Undo). Without it the task goes to the end of `status`. */
   position?: string;
 }
 
 export interface PlannedMove {
   id: string;
-  status: Status;
+  statusId: string;
   position: string;
 }
 
@@ -72,29 +75,29 @@ export interface PlannedMove {
  * - Ids not found in `tasks` (deleted, or another board) are skipped.
  */
 export function planBulkMove(
-  tasks: readonly Pick<Task, "id" | "status" | "position">[],
+  tasks: readonly Pick<Task, "id" | "statusId" | "position">[],
   moves: readonly TaskMove[],
 ): PlannedMove[] {
   const byId = new Map(tasks.map((t) => [t.id, t]));
   const planned: PlannedMove[] = [];
-  const appendTo = new Map<Status, string[]>();
+  const appendTo = new Map<string, string[]>();
 
   for (const move of moves) {
     const current = byId.get(move.id);
     if (!current) continue;
     if (move.position) {
-      planned.push({ id: move.id, status: move.status, position: move.position });
-    } else if (current.status !== move.status) {
-      appendTo.set(move.status, [...(appendTo.get(move.status) ?? []), move.id]);
+      planned.push({ id: move.id, statusId: move.statusId, position: move.position });
+    } else if (current.statusId !== move.statusId) {
+      appendTo.set(move.statusId, [...(appendTo.get(move.statusId) ?? []), move.id]);
     }
   }
 
   const leaving = new Set([...appendTo.values()].flat());
-  for (const [status, ids] of appendTo) {
-    const staying = tasks.filter((t) => t.status === status && !leaving.has(t.id));
+  for (const [statusId, ids] of appendTo) {
+    const staying = tasks.filter((t) => t.statusId === statusId && !leaving.has(t.id));
     const last = sortTasks(staying).at(-1)?.position ?? null;
     const keys = generateNKeysBetween(last, null, ids.length);
-    ids.forEach((id, i) => planned.push({ id, status, position: keys[i] }));
+    ids.forEach((id, i) => planned.push({ id, statusId, position: keys[i] }));
   }
   return planned;
 }

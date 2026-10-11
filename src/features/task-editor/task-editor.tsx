@@ -2,13 +2,11 @@
 
 import { Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { DEFAULT_PRIORITY, DEFAULT_TYPE, LIMITS, STATUSES, TASK_TYPES } from "@/config/board";
+import { DEFAULT_PRIORITY, DEFAULT_TYPE, LIMITS, TASK_TYPES } from "@/config/board";
 import { positionAtEnd } from "@/domain/ordering";
 import {
-  statusLabel,
   titleSchema,
   type Priority,
-  type Status,
   type Task,
   type TaskType,
   type UpdateTaskInput,
@@ -27,19 +25,19 @@ const FORM_ID = "tb-task-form";
 interface Draft {
   title: string;
   description: string;
-  status: Status;
+  statusId: string;
   priority: Priority;
   type: TaskType | "";
   assigneeId: string;
   points: string;
 }
 
-function initialDraft(editor: Editor, task: Task | undefined): Draft {
+function initialDraft(editor: Editor, task: Task | undefined, defaultStatusId: string): Draft {
   if (editor.mode === "edit" && task) {
     return {
       title: task.title,
       description: task.description,
-      status: task.status,
+      statusId: task.statusId,
       priority: task.priority,
       type: task.type ?? "",
       assigneeId: task.assigneeId ?? "",
@@ -49,7 +47,7 @@ function initialDraft(editor: Editor, task: Task | undefined): Draft {
   return {
     title: "",
     description: "",
-    status: editor.mode === "create" ? editor.status : "todo",
+    statusId: editor.mode === "create" ? editor.statusId : defaultStatusId,
     priority: DEFAULT_PRIORITY,
     type: DEFAULT_TYPE,
     assigneeId: "",
@@ -125,13 +123,13 @@ export function TaskEditor() {
 }
 
 function EditorForm({ editor, task }: { editor: Editor; task: Task | undefined }) {
-  const { view, boardId } = useBoardContext();
+  const { view, boardId, statuses, statusesById, defaultStatusId } = useBoardContext();
   const closeEditor = useUi((s) => s.closeEditor);
   const showToast = useUi((s) => s.showToast);
   const setMobileStatus = useUi((s) => s.setMobileStatus);
   const createTask = useCreateTask(boardId);
   const updateTask = useUpdateTask(boardId);
-  const [draft, setDraft] = useState(() => initialDraft(editor, task));
+  const [draft, setDraft] = useState(() => initialDraft(editor, task, defaultStatusId));
   const [error, setError] = useState<string | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
 
@@ -150,7 +148,8 @@ function EditorForm({ editor, task }: { editor: Editor; task: Task | undefined }
     const clean = {
       title: title.data,
       description: draft.description.trim().slice(0, LIMITS.description),
-      status: draft.status,
+      // The column may have been deleted while the form was open.
+      statusId: statusesById.has(draft.statusId) ? draft.statusId : defaultStatusId,
       priority: draft.priority,
       type: draft.type || null,
       assigneeId: draft.assigneeId || null,
@@ -163,12 +162,12 @@ function EditorForm({ editor, task }: { editor: Editor; task: Task | undefined }
         ...clean,
         id: crypto.randomUUID(),
         boardId,
-        position: positionAtEnd(view.tasks.filter((t) => t.status === clean.status)),
+        position: positionAtEnd(view.tasks.filter((t) => t.statusId === clean.statusId)),
         createdAt: now,
         updatedAt: now,
       });
-      if (isMobileViewport()) setMobileStatus(clean.status);
-      showToast(`Task created in ${statusLabel(clean.status)}`);
+      if (isMobileViewport()) setMobileStatus(clean.statusId);
+      showToast(`Task created in ${statusesById.get(clean.statusId)?.name ?? "the board"}`);
     } else if (task) {
       const patch: UpdateTaskInput = {};
       for (const key of Object.keys(clean) as (keyof typeof clean)[]) {
@@ -236,12 +235,12 @@ function EditorForm({ editor, task }: { editor: Editor; task: Task | undefined }
           <Label htmlFor="tb-status">Status</Label>
           <Select
             id="tb-status"
-            value={draft.status}
-            onChange={(e) => set("status", e.target.value as Status)}
+            value={statusesById.has(draft.statusId) ? draft.statusId : defaultStatusId}
+            onChange={(e) => set("statusId", e.target.value)}
           >
-            {STATUSES.map((s) => (
+            {statuses.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.label}
+                {s.name}
               </option>
             ))}
           </Select>

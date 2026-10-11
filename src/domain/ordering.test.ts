@@ -45,9 +45,9 @@ describe("sortTasks", () => {
 
 describe("column helpers", () => {
   const tasks = [
-    { ...item("1", "a1"), status: "todo" },
-    { ...item("2", "a0"), status: "todo" },
-    { ...item("3", "a0"), status: "done" },
+    { ...item("1", "a1"), statusId: "todo" },
+    { ...item("2", "a0"), statusId: "todo" },
+    { ...item("3", "a0"), statusId: "done" },
   ] as Task[];
 
   it("returns one column, sorted", () => {
@@ -87,40 +87,40 @@ describe("positionForMove", () => {
 
 describe("planBulkMove", () => {
   const tasks = [
-    { id: "a", status: "todo", position: "a0" },
-    { id: "b", status: "todo", position: "a1" },
-    { id: "c", status: "todo", position: "a2" },
-    { id: "d", status: "done", position: "a0" },
+    { id: "a", statusId: "todo", position: "a0" },
+    { id: "b", statusId: "todo", position: "a1" },
+    { id: "c", statusId: "todo", position: "a2" },
+    { id: "d", statusId: "done", position: "a0" },
   ] as const;
 
   it("appends moved tasks to the end of the target column, in the order given", () => {
     const plan = planBulkMove(tasks, [
-      { id: "c", status: "done" },
-      { id: "a", status: "done" },
+      { id: "c", statusId: "done" },
+      { id: "a", statusId: "done" },
     ]);
     expect(plan.map((m) => m.id)).toEqual(["c", "a"]);
-    expect(plan.every((m) => m.status === "done")).toBe(true);
+    expect(plan.every((m) => m.statusId === "done")).toBe(true);
     const [c, a] = plan;
     expect("a0" < c.position && c.position < a.position).toBe(true);
   });
 
   it("leaves tasks that are already in the target column alone", () => {
-    expect(planBulkMove(tasks, [{ id: "d", status: "done" }])).toEqual([]);
+    expect(planBulkMove(tasks, [{ id: "d", statusId: "done" }])).toEqual([]);
   });
 
   it("uses explicit positions as-is (Undo)", () => {
-    expect(planBulkMove(tasks, [{ id: "d", status: "todo", position: "a05" }])).toEqual([
-      { id: "d", status: "todo", position: "a05" },
+    expect(planBulkMove(tasks, [{ id: "d", statusId: "todo", position: "a05" }])).toEqual([
+      { id: "d", statusId: "todo", position: "a05" },
     ]);
   });
 
   it("skips unknown ids and handles several target columns", () => {
     const plan = planBulkMove(tasks, [
-      { id: "zzz", status: "done" },
-      { id: "a", status: "review" },
-      { id: "b", status: "backlog" },
+      { id: "zzz", statusId: "done" },
+      { id: "a", statusId: "review" },
+      { id: "b", statusId: "backlog" },
     ]);
-    expect(plan.map((m) => [m.id, m.status])).toEqual([
+    expect(plan.map((m) => [m.id, m.statusId])).toEqual([
       ["a", "review"],
       ["b", "backlog"],
     ]);
@@ -129,8 +129,8 @@ describe("planBulkMove", () => {
   it("doesn't count tasks that are leaving when finding the end of a column", () => {
     // Moving every todo task to done: the done column's end is after "d".
     const plan = planBulkMove(tasks, [
-      { id: "a", status: "done" },
-      { id: "b", status: "done" },
+      { id: "a", statusId: "done" },
+      { id: "b", statusId: "done" },
     ]);
     expect(plan.every((m) => m.position > "a0")).toBe(true);
   });

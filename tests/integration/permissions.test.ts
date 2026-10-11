@@ -5,7 +5,7 @@ import { deleteBoard, getBoardView, listBoards, renameBoard } from "@/server/ser
 import { cancelInvite, createInvite } from "@/server/services/invites";
 import { removeMember } from "@/server/services/members";
 import { createTask, deleteTask, restoreTask, updateTask } from "@/server/services/tasks";
-import { makeSharedBoard, makeTask, makeUser, taskInput } from "./support/fixtures";
+import { makeSharedBoard, makeTask, makeUser, statusIds, taskInput } from "./support/fixtures";
 
 describe("board permissions", () => {
   it("hides boards from non-members with 404 on every operation", async () => {
@@ -17,7 +17,7 @@ describe("board permissions", () => {
       getBoardView(outsider.id, board.id),
       renameBoard(outsider.id, board.id, "Mine now"),
       deleteBoard(outsider.id, board.id),
-      createTask(outsider.id, board.id, taskInput()),
+      createTask(outsider.id, board.id, await taskInput(board.id)),
       updateTask(outsider.id, board.id, existing.id, { title: "x" }),
       deleteTask(outsider.id, board.id, existing.id),
       restoreTask(outsider.id, board.id, existing.id),
@@ -34,8 +34,8 @@ describe("board permissions", () => {
     const { owner, member, board } = await makeSharedBoard();
     const created = await makeTask(member.id, board.id, { title: "Member task" });
     await expect(
-      updateTask(member.id, board.id, created.id, { status: "done" }),
-    ).resolves.toMatchObject({ status: "done" });
+      updateTask(member.id, board.id, created.id, { statusId: (await statusIds(board.id)).Done }),
+    ).resolves.toMatchObject({ statusId: (await statusIds(board.id)).Done });
 
     await expect(renameBoard(member.id, board.id, "Renamed")).rejects.toMatchObject({
       status: 403,

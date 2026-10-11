@@ -9,9 +9,9 @@
  */
 import { and, eq } from "drizzle-orm";
 import { generateNKeysBetween } from "fractional-indexing";
-import { STATUSES } from "@/config/board";
-import type { CreateTaskInput, Status } from "@/domain/task";
+import type { CreateTaskInput } from "@/domain/task";
 import { auth } from "@/server/auth";
+import { insertDefaultStatuses, listStatuses } from "@/server/services/statuses";
 import { db } from "@/server/db/client";
 import { board, boardMember, task, user } from "@/server/db/schema";
 
@@ -30,21 +30,25 @@ const people = {
 } as const;
 type Person = keyof typeof people;
 
-type SeedTask = Omit<CreateTaskInput, "assigneeId"> & { assignee: Person | null };
+/** `column` is the status name on the Demo board. */
+type SeedTask = Omit<CreateTaskInput, "assigneeId" | "statusId"> & {
+  column: string;
+  assignee: Person | null;
+};
 const t = (
-  status: Status,
+  column: string,
   title: string,
   description: string,
   assignee: Person | null,
   priority: SeedTask["priority"],
   type: SeedTask["type"],
   points: number | null,
-): SeedTask => ({ status, title, description, assignee, priority, type, points });
+): SeedTask => ({ column, title, description, assignee, priority, type, points });
 
 // The sample tasks from design/design.html.
 const tasks: SeedTask[] = [
   t(
-    "todo",
+    "To Do",
     "[Tech][Spike] CSV Download",
     "Propose solution for CSV download feature across reporting pages",
     "vnn",
@@ -53,7 +57,7 @@ const tasks: SeedTask[] = [
     null,
   ),
   t(
-    "todo",
+    "To Do",
     "[Kick-Off] Prepare Miro board on Inception Deck 2",
     "Reference others team Kick-off for technical alignment",
     "vtq",
@@ -62,7 +66,7 @@ const tasks: SeedTask[] = [
     null,
   ),
   t(
-    "todo",
+    "To Do",
     "[Kick-Off] Well-document on how A/N works as-is on OPUS",
     "",
     "vtq",
@@ -71,7 +75,7 @@ const tasks: SeedTask[] = [
     null,
   ),
   t(
-    "todo",
+    "To Do",
     "[Testing] Test Cases Workflow Efficiency",
     "Reason why fail with Gherkin Cucumber scenarios on CI",
     "vtq",
@@ -79,10 +83,18 @@ const tasks: SeedTask[] = [
     "testing",
     null,
   ),
-  t("todo", "[MDS] Knowledge Catchup", "", "vtq", "medium", "tech", null),
-  t("progress", "[Tech][Backend] Investigate data model integration", "", "vtq", "high", "tech", 1),
+  t("To Do", "[MDS] Knowledge Catchup", "", "vtq", "medium", "tech", null),
   t(
-    "progress",
+    "In Progress",
+    "[Tech][Backend] Investigate data model integration",
+    "",
+    "vtq",
+    "high",
+    "tech",
+    1,
+  ),
+  t(
+    "In Progress",
     "[UI] Check MDS compatible with our system",
     "Check MDS compatible with our system and list the gaps",
     "vvq",
@@ -90,9 +102,9 @@ const tasks: SeedTask[] = [
     "uiux",
     null,
   ),
-  t("progress", "[Code] Fix Audit Issue braces package", "", "vtq", "critical", "review", null),
+  t("In Progress", "[Code] Fix Audit Issue braces package", "", "vtq", "critical", "review", null),
   t(
-    "backlog",
+    "Backlog",
     "[Docs] Onboarding guide for new joiners",
     "Local setup, environments and release process",
     "vnn",
@@ -101,7 +113,7 @@ const tasks: SeedTask[] = [
     null,
   ),
   t(
-    "review",
+    "In Review",
     "[Bug] Date picker loses timezone offset",
     "Selected date shifts by one day for UTC− users",
     "vvq",
@@ -109,7 +121,7 @@ const tasks: SeedTask[] = [
     "bug",
     2,
   ),
-  t("done", "[Setup] Configure CI pipeline for monorepo", "", "vtq", "medium", "tech", 3),
+  t("Done", "[Setup] Configure CI pipeline for monorepo", "", "vtq", "medium", "tech", 3),
 ];
 
 async function ensureUser(person: Person): Promise<{ id: string; created: boolean }> {
@@ -139,15 +151,21 @@ async function createDemoBoard(ids: Record<Person, string>) {
     { boardId: demo.id, userId: ids.vnn, role: "member" },
     { boardId: demo.id, userId: ids.vvq, role: "member" },
   ]);
-  for (const status of STATUSES) {
-    const column = tasks.filter((x) => x.status === status.id);
+  await insertDefaultStatuses(db, demo.id);
+  for (const status of await listStatuses(demo.id)) {
+    const column = tasks.filter((x) => x.column === status.name);
     if (column.length === 0) continue;
     const positions = generateNKeysBetween(null, null, column.length);
     await db.insert(task).values(
-      column.map(({ assignee, ...rest }, i) => ({
-        ...rest,
+      column.map((item, i) => ({
+        title: item.title,
+        description: item.description,
+        priority: item.priority,
+        type: item.type,
+        points: item.points,
         boardId: demo.id,
-        assigneeId: assignee ? ids[assignee] : null,
+        statusId: status.id,
+        assigneeId: item.assignee ? ids[item.assignee] : null,
         position: positions[i],
         createdBy: ids.vtq,
       })),

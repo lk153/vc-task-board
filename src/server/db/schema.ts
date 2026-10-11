@@ -13,7 +13,8 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Priority, Role, Status, TaskType } from "@/domain/task";
+import type { Tone } from "@/config/board";
+import type { Priority, Role, TaskType } from "@/domain/task";
 
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 const createdAt = () => timestamptz("created_at").notNull().defaultNow();
@@ -111,6 +112,32 @@ export const board = pgTable("board", {
   updatedAt: updatedAt(),
 });
 
+/** A board's columns. Each board has its own, managed by its owners. */
+export const boardStatus = pgTable(
+  "board_status",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    boardId: uuid("board_id")
+      .notNull()
+      .references(() => board.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    tone: text("tone").$type<Tone>().notNull(),
+    /** Column order (fractional-indexing key). */
+    position: positionKey("position").notNull(),
+    /** Where "New task" and the N key put new tasks. Exactly one per board. */
+    isDefault: boolean("is_default").notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("board_status_board_idx").on(t.boardId, t.position),
+    uniqueIndex("board_status_name_idx").on(t.boardId, sql`lower(${t.name})`),
+    uniqueIndex("board_status_default_idx")
+      .on(t.boardId)
+      .where(sql`${t.isDefault}`),
+  ],
+);
+
 export const boardMember = pgTable(
   "board_member",
   {
@@ -162,7 +189,10 @@ export const task = pgTable(
       .references(() => board.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     description: text("description").notNull().default(""),
-    status: text("status").$type<Status>().notNull(),
+    /** The column the task is in. Deleting a status moves its tasks first. */
+    statusId: uuid("status_id")
+      .notNull()
+      .references(() => boardStatus.id, { onDelete: "restrict" }),
     priority: text("priority").$type<Priority>().notNull(),
     type: text("type").$type<TaskType>(),
     assigneeId: text("assignee_id").references(() => user.id, { onDelete: "set null" }),
@@ -176,7 +206,7 @@ export const task = pgTable(
   },
   (t) => [
     index("task_board_column_idx")
-      .on(t.boardId, t.status, t.position)
+      .on(t.boardId, t.statusId, t.position)
       .where(sql`${t.deletedAt} is null`),
   ],
 );

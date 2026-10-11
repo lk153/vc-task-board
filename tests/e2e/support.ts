@@ -100,6 +100,18 @@ export async function createTask(page: Page, fields: TaskFields) {
   await expect(card(page, fields.title)).toBeVisible();
 }
 
+/**
+ * Presses N until the editor opens. Right after a (re)load the page may not be
+ * hydrated yet, so an early key press has no handler; once a dialog is open
+ * further presses are ignored, so retrying is safe.
+ */
+export async function pressNewTaskShortcut(page: Page) {
+  await expect(async () => {
+    await page.locator("body").press("n");
+    await expect(editor(page)).toBeVisible({ timeout: 1000 });
+  }).toPass();
+}
+
 /** Fails on serious or critical WCAG 2 A/AA violations. */
 export async function expectAccessible(page: Page) {
   const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();

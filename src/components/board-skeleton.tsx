@@ -1,4 +1,4 @@
-import { STATUSES } from "@/config/board";
+import { DEFAULT_STATUSES } from "@/config/board";
 import { Logo } from "@/components/ui/logo";
 
 /** Static placeholder shown while the board streams in. */
@@ -14,9 +14,9 @@ export function BoardSkeleton() {
         <div className="size-[34px] animate-pulse rounded-full bg-surface-2" />
       </div>
       <div className="flex flex-1 gap-3 overflow-hidden p-2 desk:p-4">
-        {STATUSES.map((status, index) => (
+        {DEFAULT_STATUSES.map((status, index) => (
           <div
-            key={status.id}
+            key={status.name}
             className={`flex flex-1 flex-col gap-2.5 p-2 desk:max-w-[340px] desk:min-w-[264px] desk:basis-0 ${index > 0 ? "max-desk:hidden" : ""}`}
           >
             <div className="h-6 w-24 animate-pulse rounded-[5px] bg-surface-3" />

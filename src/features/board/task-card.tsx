@@ -5,8 +5,8 @@ import { CSS } from "@dnd-kit/utilities";
 import { AlignLeft, Check, Hash, Trash2 } from "lucide-react";
 import type { KeyboardEvent, MouseEvent } from "react";
 import { DISPLAY, PRIORITIES, TASK_TYPES } from "@/config/board";
-import { statusLabel, type Task } from "@/domain/task";
-import { assigneeTone, priorityTone, statusTone, toneVars, typeTone } from "@/domain/tone";
+import type { Task } from "@/domain/task";
+import { assigneeTone, priorityTone, toneVars, typeTone } from "@/domain/tone";
 import { Tag } from "@/components/ui/tag";
 import { cn } from "@/lib/cn";
 import { useUi } from "@/store/ui-store";
@@ -66,11 +66,13 @@ const cardClass = (compact: boolean) =>
 
 /** A copy of the card that follows the pointer while dragging. */
 export function TaskCardOverlay({ task }: CardViewProps) {
+  const { statusesById } = useBoardContext();
+  const tone = statusesById.get(task.statusId)?.tone ?? "gray";
   return (
     <div
       // No rotation: the overlay's box must line up with the card for keyboard moves.
       className={cn(cardClass(DISPLAY.compactCards), "shadow-hover")}
-      style={{ borderBottomColor: toneVars(statusTone(task.status)).line }}
+      style={{ borderBottomColor: toneVars(tone).line }}
     >
       <CardContent task={task} />
     </div>
@@ -89,6 +91,7 @@ export function TaskCard({ task, dragDisabled }: { task: Task; dragDisabled: boo
   const selecting = useUi((s) => s.selecting);
   const isSelected = useUi((s) => s.selected.includes(task.id));
   const toggleSelected = useUi((s) => s.toggleSelected);
+  const { statusesById } = useBoardContext();
   const priority = PRIORITIES.find((p) => p.id === task.priority);
   const {
     attributes,
@@ -129,7 +132,8 @@ export function TaskCard({ task, dragDisabled }: { task: Task; dragDisabled: boo
     else openEdit(task.id);
   }
 
-  const label = `${task.title}. ${statusLabel(task.status)}${priority ? `, ${priority.label} priority` : ""}.`;
+  const status = statusesById.get(task.statusId);
+  const label = `${task.title}. ${status?.name ?? ""}${priority ? `, ${priority.label} priority` : ""}.`;
 
   // The delete button sits next to (not inside) the card so the two controls aren't nested.
   return (
@@ -160,7 +164,7 @@ export function TaskCard({ task, dragDisabled }: { task: Task; dragDisabled: boo
           isSelected &&
             "border-accent bg-[color-mix(in_srgb,var(--accent)_7%,var(--surface))] shadow-[0_0_0_1px_var(--accent)]",
         )}
-        style={{ borderBottomColor: toneVars(statusTone(task.status)).line }}
+        style={{ borderBottomColor: toneVars(status?.tone ?? "gray").line }}
       >
         <CardContent task={task} />
         {selecting && (

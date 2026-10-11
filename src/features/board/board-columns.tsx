@@ -19,18 +19,18 @@ import {
 } from "@dnd-kit/core";
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useMemo, useRef, useState } from "react";
-import { STATUSES } from "@/config/board";
 import { countLabel, isFiltering, matchTask, type TaskFilters } from "@/domain/filter";
 import { positionForMove } from "@/domain/ordering";
-import { statusLabel, type Status, type Task } from "@/domain/task";
+import type { Task } from "@/domain/task";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 import { useUi } from "@/store/ui-store";
 import { useUpdateTask } from "./api";
-import { useBoardContext } from "./board-context";
-import { Column } from "./column";
+import { useBoardContext, useMobileStatusId } from "./board-context";
+import { AddStatusColumn, Column } from "./column";
 import { TaskCardOverlay } from "./task-card";
 
-type Columns = Record<Status, string[]>;
+/** Visible task ids per status id. */
+type Columns = Record<string, string[]>;
 
 /** Card arrangement while dragging, and the data it was built from. */
 interface DragState {
@@ -39,9 +39,9 @@ interface DragState {
   filters: TaskFilters;
 }
 
-const columnOf = (id: string, columns: Columns): Status | null => {
-  if (id.startsWith("column:")) return id.slice("column:".length) as Status;
-  return STATUSES.find((s) => columns[s.id].includes(id))?.id ?? null;
+const columnOf = (id: string, columns: Columns): string | null => {
+  if (id.startsWith("column:")) return id.slice("column:".length);
+  return Object.keys(columns).find((statusId) => columns[statusId].includes(id)) ?? null;
 };
 
 /**
@@ -69,9 +69,9 @@ const instructions = {
  * dragging is off — status changes go through the editor.
  */
 export function BoardColumns() {
-  const { view, boardId } = useBoardContext();
+  const { view, boardId, statuses, statusesById, isOwner } = useBoardContext();
   const filters = useUi((s) => s.filters);
-  const mobileStatus = useUi((s) => s.mobileStatus);
+  const mobileStatus = useMobileStatusId();
   const setDragging = useUi((s) => s.setDragging);
   const showToast = useUi((s) => s.showToast);
   const selecting = useUi((s) => s.selecting);
@@ -80,19 +80,19 @@ export function BoardColumns() {
 
   const tasksById = useMemo(() => new Map(view.tasks.map((t) => [t.id, t])), [view.tasks]);
   const visible = useMemo(() => {
-    const columns = {} as Columns;
-    for (const status of STATUSES) {
+    const columns: Columns = {};
+    for (const status of statuses) {
       columns[status.id] = view.tasks
-        .filter((t) => t.status === status.id && matchTask(t, filters))
+        .filter((t) => t.statusId === status.id && matchTask(t, filters))
         .map((t) => t.id);
     }
     return columns;
-  }, [view.tasks, filters]);
+  }, [view.tasks, filters, statuses]);
 
   const [drag, setDrag] = useState<DragState | null>(null);
   const keyboardDrag = useRef(false);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [overColumn, setOverColumn] = useState<Status | null>(null);
+  const [overColumn, setOverColumn] = useState<string | null>(null);
 
   // During a drag show the drag arrangement. After the drop keep it until the
   // optimistic update changes the data, so the card doesn't flicker back.
@@ -163,7 +163,7 @@ export function BoardColumns() {
       if (from >= 0 && target >= 0) items = arrayMove(items, from, target);
     }
     const index = items.indexOf(id);
-    if (index < 0 || (task.status === to && visible[to].indexOf(id) === index)) {
+    if (index < 0 || (task.statusId === to && visible[to]?.indexOf(id) === index)) {
       return finish(null);
     }
 
@@ -172,9 +172,10 @@ export function BoardColumns() {
     const position = positionForMove(neighbours, id, index);
     updateTask.mutate({
       taskId: id,
-      patch: to === task.status ? { position } : { status: to, position },
+      patch: to === task.statusId ? { position } : { statusId: to, position },
     });
-    if (to !== task.status) showToast(`Moved to ${statusLabel(to)}`);
+    if (to !== task.statusId)
+      showToast(`Moved to ${statusesById.get(to)?.name ?? "another column"}`);
   }
 
   const activeTask = activeId ? tasksById.get(activeId) : undefined;
@@ -184,7 +185,7 @@ export function BoardColumns() {
   const name = (id: UniqueIdentifier) => tasksById.get(String(id))?.title ?? "Task";
   const place = (id: UniqueIdentifier) => {
     const status = columnOf(String(id), columns);
-    return status ? statusLabel(status) : "the board";
+    return (status && statusesById.get(status)?.name) || "the board";
   };
   const announcements: Announcements = {
     onDragStart: ({ active }) => `Picked up ${name(active.id)}.`,
@@ -201,6 +202,8 @@ export function BoardColumns() {
 
   return (
     <DndContext
+      // A fixed id keeps dnd-kit's aria-describedby the same on server and client.
+      id="board"
       sensors={sensors}
       collisionDetection={(args) =>
         keyboardDrag.current ? rectIntersection(args) : pointerFirst(args)
@@ -215,9 +218,9 @@ export function BoardColumns() {
         data-screen-label="Board"
         className="flex flex-1 items-stretch gap-3 overflow-x-auto px-2 pt-1 pb-[104px] desk:p-4 desk:pb-10"
       >
-        {STATUSES.map((status) => {
-          const total = view.tasks.filter((t) => t.status === status.id).length;
-          const tasks = columns[status.id]
+        {statuses.map((status) => {
+          const total = view.tasks.filter((t) => t.statusId === status.id).length;
+          const tasks = (columns[status.id] ?? [])
             .map((id) => tasksById.get(id))
             .filter((t): t is Task => Boolean(t));
           const over = Boolean(activeId) && overColumn === status.id;
@@ -226,7 +229,7 @@ export function BoardColumns() {
               key={status.id}
               status={status}
               tasks={tasks}
-              countLabel={countLabel(visible[status.id].length, total, filtering)}
+              countLabel={countLabel(visible[status.id]?.length ?? 0, total, filtering)}
               emptyLabel={over ? "Drop here" : total ? "No matching tasks" : "No tasks yet"}
               isOver={over}
               hiddenOnMobile={status.id !== mobileStatus}
@@ -234,6 +237,7 @@ export function BoardColumns() {
             />
           );
         })}
+        {isOwner && <AddStatusColumn />}
       </main>
       <DragOverlay>{activeTask ? <TaskCardOverlay task={activeTask} /> : null}</DragOverlay>
     </DndContext>

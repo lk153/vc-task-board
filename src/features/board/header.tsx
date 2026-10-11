@@ -1,7 +1,6 @@
 "use client";
 
 import { Filter, ListChecks, Plus, Search, Users, X } from "lucide-react";
-import { DEFAULT_STATUS } from "@/config/board";
 import { filterCount } from "@/domain/filter";
 import { Button, IconButton } from "@/components/ui/button";
 import { Logo } from "@/components/ui/logo";
@@ -10,6 +9,7 @@ import { useUi } from "@/store/ui-store";
 import { ThemeToggle } from "../account/theme-toggle";
 import { UserMenu } from "../account/user-menu";
 import { BoardSwitcher } from "../boards/board-switcher";
+import { useBoardContext } from "./board-context";
 
 export const SEARCH_INPUT_ID = "board-search";
 
@@ -154,11 +154,12 @@ function ShareButton() {
 
 function NewTaskButton() {
   const openCreate = useUi((s) => s.openCreate);
+  const { defaultStatusId } = useBoardContext();
   return (
     <Button
       variant="primary"
       size="md"
-      onClick={() => openCreate(DEFAULT_STATUS)}
+      onClick={() => openCreate(defaultStatusId)}
       title="New task (N)"
       aria-keyshortcuts="N"
       className="hidden pr-3.5 pl-[11px] desk:inline-flex"

@@ -3,6 +3,7 @@ import { db } from "@/server/db/client";
 import { user } from "@/server/db/schema";
 import { createBoard } from "@/server/services/boards";
 import { createInvite, acceptInvite } from "@/server/services/invites";
+import { listStatuses } from "@/server/services/statuses";
 import { createTask } from "@/server/services/tasks";
 import type { CreateTaskInput } from "@/domain/task";
 
@@ -25,11 +26,26 @@ export async function makeSharedBoard() {
   return { owner, member, board };
 }
 
-export function taskInput(overrides: Partial<CreateTaskInput> = {}): CreateTaskInput {
+/** Status ids by column name, e.g. `(await statusIds(board.id))["Done"]`. */
+export async function statusIds(boardId: string): Promise<Record<string, string>> {
+  const statuses = await listStatuses(boardId).catch(() => []);
+  return Object.fromEntries(statuses.map((s) => [s.name, s.id]));
+}
+
+type TaskOverrides = Partial<Omit<CreateTaskInput, "statusId">> & {
+  /** Column name on the board (default "To Do"). */
+  status?: string;
+};
+
+/** A valid task body for `boardId`; unknown boards get a random status id. */
+export async function taskInput(
+  boardId: string,
+  { status = "To Do", ...overrides }: TaskOverrides = {},
+): Promise<CreateTaskInput> {
   return {
     title: "Write tests",
     description: "",
-    status: "todo",
+    statusId: (await statusIds(boardId))[status] ?? randomUUID(),
     priority: "medium",
     type: "tech",
     assigneeId: null,
@@ -38,10 +54,6 @@ export function taskInput(overrides: Partial<CreateTaskInput> = {}): CreateTaskI
   };
 }
 
-export function makeTask(
-  userId: string,
-  boardId: string,
-  overrides: Partial<CreateTaskInput> = {},
-) {
-  return createTask(userId, boardId, taskInput(overrides));
+export async function makeTask(userId: string, boardId: string, overrides: TaskOverrides = {}) {
+  return createTask(userId, boardId, await taskInput(boardId, overrides));
 }

@@ -1,4 +1,14 @@
-import { card, column, editor, expect, expectAccessible, fillTask, signUp, test } from "./support";
+import {
+  card,
+  column,
+  editor,
+  expect,
+  expectAccessible,
+  fillTask,
+  pressNewTaskShortcut,
+  signUp,
+  test,
+} from "./support";
 
 test.describe("create tasks", () => {
   test.beforeEach(async ({ page }) => {
@@ -10,7 +20,7 @@ test.describe("create tasks", () => {
     const dialog = editor(page);
     await expect(dialog.getByRole("heading", { name: "New task" })).toBeVisible();
     await expect(dialog.getByLabel("Title")).toBeFocused();
-    await expect(dialog.getByLabel("Status")).toHaveValue("todo");
+    await expect(dialog.getByLabel("Status").locator("option:checked")).toHaveText("To Do");
     await expect(dialog.getByRole("radio", { name: "Medium" })).toHaveAttribute(
       "aria-checked",
       "true",
@@ -48,7 +58,9 @@ test.describe("create tasks", () => {
 
   test("from a column's + button, preset to that status", async ({ page }) => {
     await page.getByRole("button", { name: "Add task to In Review" }).click();
-    await expect(editor(page).getByLabel("Status")).toHaveValue("review");
+    await expect(editor(page).getByLabel("Status").locator("option:checked")).toHaveText(
+      "In Review",
+    );
     await fillTask(page, { title: "Review the PR" });
     await editor(page).getByRole("button", { name: "Create task" }).click();
     await expect(card(column(page, "In Review"), "Review the PR")).toBeVisible();
@@ -62,12 +74,12 @@ test.describe("create tasks", () => {
   });
 
   test("with the N shortcut, and Esc cancels", async ({ page }) => {
-    await page.locator("body").press("n");
+    await pressNewTaskShortcut(page);
     await expect(editor(page).getByRole("heading", { name: "New task" })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(editor(page)).toBeHidden();
 
-    await page.locator("body").press("n");
+    await pressNewTaskShortcut(page);
     await fillTask(page, { title: "Made with N" });
     await editor(page).getByRole("button", { name: "Create task" }).click();
     await expect(card(column(page, "To Do"), "Made with N")).toBeVisible();

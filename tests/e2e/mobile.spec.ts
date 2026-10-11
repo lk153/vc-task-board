@@ -29,7 +29,9 @@ test.describe("mobile layout (< 720px)", () => {
     await tabs.getByRole("button", { name: /In Progress/ }).click();
     await expect(card(page, "Phone task")).toBeHidden();
     await page.getByRole("button", { name: "New task", exact: true }).click();
-    await expect(editor(page).getByLabel("Status")).toHaveValue("progress");
+    await expect(editor(page).getByLabel("Status").locator("option:checked")).toHaveText(
+      "In Progress",
+    );
     await page.keyboard.press("Escape");
   });
 
@@ -82,5 +84,25 @@ test.describe("mobile layout (< 720px)", () => {
       .click();
     await expect(card(page, "Phone A")).toBeVisible();
     await expect(card(page, "Phone B")).toBeVisible();
+  });
+
+  test("owners add and delete statuses from the tab row", async ({ page }) => {
+    const tabs = page.getByRole("navigation", { name: "Status" });
+    await page.getByRole("button", { name: "Add status" }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel("Name").fill("Blocked");
+    await dialog.getByRole("button", { name: "Add status" }).click();
+    await expect(tabs.getByRole("button", { name: /Blocked/ })).toBeVisible();
+
+    await tabs.getByRole("button", { name: /Blocked/ }).click();
+    await page.getByRole("button", { name: "Options for Blocked" }).click();
+    await page.getByRole("menuitem", { name: "Delete status" }).click();
+    await dialog.getByRole("button", { name: "Delete status" }).click();
+    await expect(tabs.getByRole("button", { name: /Blocked/ })).toHaveCount(0);
+    // Falls back to the default column.
+    await expect(tabs.getByRole("button", { name: /To Do/ })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
   });
 });

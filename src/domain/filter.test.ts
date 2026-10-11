@@ -15,7 +15,7 @@ const task = (overrides: Partial<Task> = {}): Task => ({
   boardId: "b1",
   title: "[Tech] CSV Download",
   description: "Propose a solution for reporting pages",
-  status: "todo",
+  statusId: "todo",
   priority: "high",
   type: "tech",
   assigneeId: "u1",

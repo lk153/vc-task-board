@@ -1,17 +1,12 @@
 import "server-only";
 import { and, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
-import {
-  bulkMoveSchema,
-  createTaskSchema,
-  updateTaskSchema,
-  type Status,
-  type Task,
-} from "@/domain/task";
+import { bulkMoveSchema, createTaskSchema, updateTaskSchema, type Task } from "@/domain/task";
 import { planBulkMove, positionBetween } from "@/domain/ordering";
 import { db } from "../db/client";
 import { task } from "../db/schema";
 import { conflict, invalid, notFound } from "../errors";
 import { assertUuid, isMember, requireMember } from "./access";
+import { assertBoardStatus } from "./statuses";
 
 type TaskRow = typeof task.$inferSelect;
 
@@ -21,7 +16,7 @@ export function toTask(row: TaskRow): Task {
     boardId: row.boardId,
     title: row.title,
     description: row.description,
-    status: row.status,
+    statusId: row.statusId,
     priority: row.priority,
     type: row.type,
     assigneeId: row.assigneeId,
@@ -33,11 +28,11 @@ export function toTask(row: TaskRow): Task {
 }
 
 /** Key that places a card after the last live card in a column. */
-async function endOfColumn(boardId: string, status: Status): Promise<string> {
+async function endOfColumn(boardId: string, statusId: string): Promise<string> {
   const [last] = await db
     .select({ position: task.position })
     .from(task)
-    .where(and(eq(task.boardId, boardId), eq(task.status, status), isNull(task.deletedAt)))
+    .where(and(eq(task.boardId, boardId), eq(task.statusId, statusId), isNull(task.deletedAt)))
     .orderBy(desc(task.position))
     .limit(1);
   return positionBetween(last?.position ?? null, null);
@@ -68,6 +63,7 @@ async function findTask(boardId: string, taskId: string, { deleted = false } = {
 export async function createTask(userId: string, boardId: string, raw: unknown): Promise<Task> {
   await requireMember(userId, boardId);
   const input = createTaskSchema.parse(raw);
+  await assertBoardStatus(boardId, input.statusId);
   await assertAssignable(boardId, input.assigneeId);
 
   const [row] = await db
@@ -75,7 +71,7 @@ export async function createTask(userId: string, boardId: string, raw: unknown):
     .values({
       ...input,
       boardId,
-      position: await endOfColumn(boardId, input.status),
+      position: await endOfColumn(boardId, input.statusId),
       createdBy: userId,
     })
     .onConflictDoNothing({ target: task.id })
@@ -84,7 +80,7 @@ export async function createTask(userId: string, boardId: string, raw: unknown):
   return toTask(row);
 }
 
-/** Updates fields and/or moves the task (`status` + `position`). */
+/** Updates fields and/or moves the task (`statusId` + `position`). */
 export async function updateTask(
   userId: string,
   boardId: string,
@@ -94,13 +90,14 @@ export async function updateTask(
   await requireMember(userId, boardId);
   const patch = updateTaskSchema.parse(raw);
   const current = await findTask(boardId, taskId);
+  if (patch.statusId) await assertBoardStatus(boardId, patch.statusId);
   if (patch.assigneeId !== undefined) await assertAssignable(boardId, patch.assigneeId);
 
   // Changing column without an explicit position appends to the new column.
   const position =
     patch.position ??
-    (patch.status && patch.status !== current.status
-      ? await endOfColumn(boardId, patch.status)
+    (patch.statusId && patch.statusId !== current.statusId
+      ? await endOfColumn(boardId, patch.statusId)
       : undefined);
 
   const [row] = await db
@@ -150,6 +147,9 @@ export async function bulkMoveTasks(
   const { tasks: moves } = bulkMoveSchema.parse(raw);
 
   return db.transaction(async (tx) => {
+    for (const statusId of new Set(moves.map((m) => m.statusId))) {
+      await assertBoardStatus(boardId, statusId, tx);
+    }
     // Lock the moved rows so concurrent edits can't interleave.
     await tx
       .select({ id: task.id })
@@ -165,7 +165,7 @@ export async function bulkMoveTasks(
       )
       .for("update");
     const live = await tx
-      .select({ id: task.id, status: task.status, position: task.position })
+      .select({ id: task.id, statusId: task.statusId, position: task.position })
       .from(task)
       .where(and(eq(task.boardId, boardId), isNull(task.deletedAt)));
 
@@ -174,7 +174,7 @@ export async function bulkMoveTasks(
     for (const move of planBulkMove(live, moves)) {
       const [row] = await tx
         .update(task)
-        .set({ status: move.status, position: move.position, updatedAt: now })
+        .set({ statusId: move.statusId, position: move.position, updatedAt: now })
         .where(and(eq(task.id, move.id), eq(task.boardId, boardId)))
         .returning();
       updated.push(toTask(row));

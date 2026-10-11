@@ -2,18 +2,15 @@
 
 import { ChevronUp, X } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
-import { STATUSES } from "@/config/board";
 import { matchTask } from "@/domain/filter";
 import { columnTasks, planBulkMove, type TaskMove } from "@/domain/ordering";
-import { statusLabel, type Status } from "@/domain/task";
-import { statusTone } from "@/domain/tone";
 import { Button, IconButton } from "@/components/ui/button";
 import { MenuItem, MenuPanel } from "@/components/ui/menu";
 import { Tag } from "@/components/ui/tag";
 import { isMobileViewport } from "@/hooks/use-is-mobile";
 import { useUi } from "@/store/ui-store";
 import { useBulkMoveTasks } from "./api";
-import { useBoardContext } from "./board-context";
+import { useBoardContext, useMobileStatusId } from "./board-context";
 
 const plural = (n: number) => `${n} task${n === 1 ? "" : "s"}`;
 
@@ -22,7 +19,8 @@ const plural = (n: number) => `${n} task${n === 1 ? "" : "s"}`;
  * select all / clear, and Done. Floating pill on desktop, bottom bar on mobile.
  */
 export function BulkBar() {
-  const { view, boardId } = useBoardContext();
+  const { view, boardId, statuses, statusesById } = useBoardContext();
+  const mobileStatusId = useMobileStatusId();
   const selecting = useUi((s) => s.selecting);
   const selected = useUi((s) => s.selected);
   const filters = useUi((s) => s.filters);
@@ -36,31 +34,33 @@ export function BulkBar() {
   const visible = view.tasks.filter((t) => matchTask(t, filters));
   const chosen = visible.filter((t) => selected.includes(t.id));
   // Board order: column by column, top to bottom.
-  const ordered = STATUSES.flatMap((s) => columnTasks(chosen, s.id));
+  const ordered = statuses.flatMap((s) => columnTasks(chosen, s.id));
   const count = ordered.length;
 
   function selectAll() {
-    const mobileStatus = useUi.getState().mobileStatus;
     // On mobile only one column is on screen, so "all" means that column.
-    const pool = isMobileViewport() ? visible.filter((t) => t.status === mobileStatus) : visible;
+    const pool = isMobileViewport()
+      ? visible.filter((t) => t.statusId === mobileStatusId)
+      : visible;
     setSelected([...new Set([...selected, ...pool.map((t) => t.id)])]);
   }
 
-  function moveTo(status: Status) {
-    const moves: TaskMove[] = ordered.map((t) => ({ id: t.id, status }));
+  function moveTo(statusId: string) {
+    const name = statusesById.get(statusId)?.name ?? "that column";
+    const moves: TaskMove[] = ordered.map((t) => ({ id: t.id, statusId }));
     const plan = planBulkMove(view.tasks, moves);
     if (plan.length === 0) {
-      showToast(`Already in ${statusLabel(status)}`);
+      showToast(`Already in ${name}`);
       return;
     }
     const previous: TaskMove[] = plan.map((m) => {
       const task = view.tasks.find((t) => t.id === m.id)!;
-      return { id: task.id, status: task.status, position: task.position };
+      return { id: task.id, statusId: task.statusId, position: task.position };
     });
 
     const moving = bulkMove.mutateAsync(moves);
     stopSelecting();
-    showToast(`Moved ${plural(plan.length)} to ${statusLabel(status)}`, {
+    showToast(`Moved ${plural(plan.length)} to ${name}`, {
       label: "Undo",
       // Wait for the move to land before putting things back.
       onClick: () =>
@@ -92,9 +92,9 @@ export function BulkBar() {
           </Button>
         </DropdownMenu.Trigger>
         <MenuPanel side="top" align="center" className="min-w-44">
-          {STATUSES.map((status) => (
+          {statuses.map((status) => (
             <MenuItem key={status.id} onSelect={() => moveTo(status.id)}>
-              <Tag tone={statusTone(status.id)}>{status.label}</Tag>
+              <Tag tone={status.tone}>{status.name}</Tag>
             </MenuItem>
           ))}
         </MenuPanel>

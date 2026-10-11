@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { positionBetween } from "@/domain/ordering";
 import { createBoard, getBoardView } from "@/server/services/boards";
 import { createTask, deleteTask, restoreTask, updateTask } from "@/server/services/tasks";
-import { makeSharedBoard, makeTask, makeUser, taskInput } from "./support/fixtures";
+import { makeSharedBoard, makeTask, makeUser, statusIds, taskInput } from "./support/fixtures";
 
 describe("tasks", () => {
   it("creates tasks at the end of their column, in order", async () => {
@@ -21,7 +21,7 @@ describe("tasks", () => {
     const created = await makeTask(owner.id, board.id, {
       title: "  Spike CSV export  ",
       description: " Reporting pages ",
-      status: "progress",
+      status: "In Progress",
       priority: "critical",
       type: "bug",
       assigneeId: member.id,
@@ -30,7 +30,7 @@ describe("tasks", () => {
     expect(created).toMatchObject({
       title: "Spike CSV export",
       description: "Reporting pages",
-      status: "progress",
+      statusId: (await statusIds(board.id))["In Progress"],
       priority: "critical",
       type: "bug",
       assigneeId: member.id,
@@ -41,8 +41,12 @@ describe("tasks", () => {
   it("accepts a client-generated id once (for optimistic UI) and rejects a duplicate", async () => {
     const { owner, board } = await makeSharedBoard();
     const id = randomUUID();
-    await expect(createTask(owner.id, board.id, taskInput({ id }))).resolves.toMatchObject({ id });
-    await expect(createTask(owner.id, board.id, taskInput({ id }))).rejects.toMatchObject({
+    await expect(
+      createTask(owner.id, board.id, await taskInput(board.id, { id })),
+    ).resolves.toMatchObject({ id });
+    await expect(
+      createTask(owner.id, board.id, await taskInput(board.id, { id })),
+    ).rejects.toMatchObject({
       status: 409,
     });
   });
@@ -71,10 +75,11 @@ describe("tasks", () => {
 
   it("appends to the new column when the status changes without a position", async () => {
     const { owner, board } = await makeSharedBoard();
-    const done = await makeTask(owner.id, board.id, { status: "done" });
-    const moving = await makeTask(owner.id, board.id, { status: "todo" });
-    const moved = await updateTask(owner.id, board.id, moving.id, { status: "done" });
-    expect(moved.status).toBe("done");
+    const ids = await statusIds(board.id);
+    const done = await makeTask(owner.id, board.id, { status: "Done" });
+    const moving = await makeTask(owner.id, board.id, { status: "To Do" });
+    const moved = await updateTask(owner.id, board.id, moving.id, { statusId: ids["Done"] });
+    expect(moved.statusId).toBe(ids["Done"]);
     expect(moved.position > done.position).toBe(true);
   });
 
@@ -91,13 +96,13 @@ describe("tasks", () => {
   it("soft-deletes and restores to the same column and position", async () => {
     const { owner, member, board } = await makeSharedBoard();
     const kept = await makeTask(owner.id, board.id, { title: "Kept" });
-    const removed = await makeTask(owner.id, board.id, { title: "Removed", status: "review" });
+    const removed = await makeTask(owner.id, board.id, { title: "Removed", status: "In Review" });
 
     await deleteTask(member.id, board.id, removed.id);
     expect((await getBoardView(owner.id, board.id)).tasks.map((t) => t.id)).toEqual([kept.id]);
 
     const restored = await restoreTask(owner.id, board.id, removed.id);
-    expect(restored).toMatchObject({ status: "review", position: removed.position });
+    expect(restored).toMatchObject({ statusId: removed.statusId, position: removed.position });
     expect((await getBoardView(owner.id, board.id)).tasks).toHaveLength(2);
   });
 
@@ -111,6 +116,19 @@ describe("tasks", () => {
       updateTask(stranger.id, strangersBoard.id, task.id, { title: "x" }),
     ).rejects.toMatchObject({ status: 404 });
     await expect(deleteTask(stranger.id, board.id, task.id)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("only accepts statuses from the same board", async () => {
+    const { owner, board } = await makeSharedBoard();
+    const other = await createBoard(owner.id, "Other board");
+    const foreignStatus = (await statusIds(other.id))["Done"];
+    const created = await makeTask(owner.id, board.id);
+    await expect(
+      createTask(owner.id, board.id, { ...(await taskInput(board.id)), statusId: foreignStatus }),
+    ).rejects.toMatchObject({ status: 422 });
+    await expect(
+      updateTask(owner.id, board.id, created.id, { statusId: foreignStatus }),
+    ).rejects.toMatchObject({ status: 422 });
   });
 
   it("treats malformed ids as not found", async () => {

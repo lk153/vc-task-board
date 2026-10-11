@@ -1,11 +1,14 @@
 import { create } from "zustand";
-import { DEFAULT_STATUS, TOAST_MS } from "@/config/board";
+import { TOAST_MS } from "@/config/board";
 import { EMPTY_FILTERS, type TaskFilters } from "@/domain/filter";
-import type { Status } from "@/domain/task";
 
 /** UI-only state. Server data lives in TanStack Query; nothing here is persisted. */
 
-export type Editor = { mode: "create"; status: Status } | { mode: "edit"; taskId: string };
+export type Editor = { mode: "create"; statusId: string } | { mode: "edit"; taskId: string };
+
+/** Add / edit / delete a board status (column). */
+export type StatusDialog =
+  { mode: "add" } | { mode: "edit"; statusId: string } | { mode: "delete"; statusId: string };
 
 export type DialogName =
   "share" | "newBoard" | "renameBoard" | "deleteBoard" | "leaveBoard" | "changePassword";
@@ -21,11 +24,12 @@ export type FilterGroup = Exclude<keyof TaskFilters, "query">;
 interface UiState {
   filters: TaskFilters;
   showFilters: boolean;
-  /** Column shown on mobile. */
-  mobileStatus: Status;
+  /** Column shown on mobile (null: the board's default column). */
+  mobileStatus: string | null;
   editor: Editor | null;
   confirmDeleteId: string | null;
   dialog: DialogName | null;
+  statusDialog: StatusDialog | null;
   toast: Toast | null;
   dragging: boolean;
   /** Selection mode: clicking a card selects it instead of opening the editor. */
@@ -38,14 +42,16 @@ interface UiState {
   clearFilterGroup: (group: FilterGroup) => void;
   clearFilters: () => void;
   setShowFilters: (show: boolean) => void;
-  setMobileStatus: (status: Status) => void;
-  openCreate: (status: Status) => void;
+  setMobileStatus: (statusId: string) => void;
+  openCreate: (statusId: string) => void;
   openEdit: (taskId: string) => void;
   closeEditor: () => void;
   askDelete: (taskId: string) => void;
   cancelDelete: () => void;
   openDialog: (dialog: DialogName) => void;
   closeDialog: () => void;
+  openStatusDialog: (dialog: StatusDialog) => void;
+  closeStatusDialog: () => void;
   showToast: (message: string, action?: Toast["action"]) => void;
   dismissToast: () => void;
   setDragging: (dragging: boolean) => void;
@@ -65,10 +71,11 @@ let toastId = 0;
 export const useUi = create<UiState>()((set) => ({
   filters: EMPTY_FILTERS,
   showFilters: false,
-  mobileStatus: DEFAULT_STATUS,
+  mobileStatus: null,
   editor: null,
   confirmDeleteId: null,
   dialog: null,
+  statusDialog: null,
   toast: null,
   dragging: false,
   selecting: false,
@@ -87,13 +94,15 @@ export const useUi = create<UiState>()((set) => ({
   clearFilters: () => set((s) => ({ filters: { ...EMPTY_FILTERS, query: s.filters.query } })),
   setShowFilters: (showFilters) => set({ showFilters }),
   setMobileStatus: (mobileStatus) => set({ mobileStatus }),
-  openCreate: (status) => set({ editor: { mode: "create", status } }),
+  openCreate: (statusId) => set({ editor: { mode: "create", statusId } }),
   openEdit: (taskId) => set({ editor: { mode: "edit", taskId } }),
   closeEditor: () => set({ editor: null }),
   askDelete: (confirmDeleteId) => set({ confirmDeleteId }),
   cancelDelete: () => set({ confirmDeleteId: null }),
   openDialog: (dialog) => set({ dialog }),
   closeDialog: () => set({ dialog: null }),
+  openStatusDialog: (statusDialog) => set({ statusDialog }),
+  closeStatusDialog: () => set({ statusDialog: null }),
   showToast: (message, action) => {
     clearTimeout(toastTimer);
     const id = ++toastId;
@@ -122,10 +131,11 @@ export const useUi = create<UiState>()((set) => ({
     set({
       filters: EMPTY_FILTERS,
       showFilters: false,
-      mobileStatus: DEFAULT_STATUS,
+      mobileStatus: null,
       editor: null,
       confirmDeleteId: null,
       dialog: null,
+      statusDialog: null,
       selecting: false,
       selected: [],
     }),

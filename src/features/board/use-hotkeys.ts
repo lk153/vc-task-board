@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import { DEFAULT_STATUS } from "@/config/board";
 import { isMobileViewport } from "@/hooks/use-is-mobile";
 import { useUi } from "@/store/ui-store";
 import { SEARCH_INPUT_ID } from "./header";
@@ -15,7 +14,7 @@ const anyOverlayOpen = () =>
  * Ignored while typing, while a dialog or menu is open, or while dragging.
  * (Esc for dialogs is handled by the dialogs themselves.)
  */
-export function useBoardHotkeys() {
+export function useBoardHotkeys(defaultStatusId: string, statusIds: ReadonlySet<string>) {
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       const ui = useUi.getState();
@@ -36,7 +35,8 @@ export function useBoardHotkeys() {
 
       if (event.key === "n" || event.key === "N") {
         event.preventDefault();
-        ui.openCreate(isMobileViewport() ? ui.mobileStatus : DEFAULT_STATUS);
+        const tab = ui.mobileStatus && statusIds.has(ui.mobileStatus) ? ui.mobileStatus : null;
+        ui.openCreate(isMobileViewport() && tab ? tab : defaultStatusId);
       } else if (event.key === "/") {
         event.preventDefault();
         document.getElementById(SEARCH_INPUT_ID)?.focus();
@@ -44,5 +44,5 @@ export function useBoardHotkeys() {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [defaultStatusId, statusIds]);
 }
