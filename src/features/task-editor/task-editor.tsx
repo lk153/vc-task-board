@@ -2,20 +2,14 @@
 
 import { Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { DEFAULT_PRIORITY, DEFAULT_TYPE, LIMITS, TASK_TYPES } from "@/config/board";
+import { DEFAULT_PRIORITY, LIMITS } from "@/config/board";
 import { positionAtEnd } from "@/domain/ordering";
-import {
-  titleSchema,
-  type Priority,
-  type Task,
-  type TaskType,
-  type UpdateTaskInput,
-} from "@/domain/task";
+import { titleSchema, type Priority, type Task, type UpdateTaskInput } from "@/domain/task";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, Input, Label, Select, Textarea } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
 import { isMobileViewport } from "@/hooks/use-is-mobile";
-import { useUi, type Editor } from "@/store/ui-store";
+import { useUi, type Editor, type ListKind } from "@/store/ui-store";
 import { useCreateTask, useUpdateTask } from "../board/api";
 import { useBoardContext } from "../board/board-context";
 import { PriorityPicker } from "./priority-picker";
@@ -27,19 +21,24 @@ interface Draft {
   description: string;
   statusId: string;
   priority: Priority;
-  type: TaskType | "";
+  /** "" means none. */
+  typeId: string;
   assigneeId: string;
   points: string;
 }
 
-function initialDraft(editor: Editor, task: Task | undefined, defaultStatusId: string): Draft {
+function initialDraft(
+  editor: Editor,
+  task: Task | undefined,
+  defaults: { statusId: string; typeId: string | null },
+): Draft {
   if (editor.mode === "edit" && task) {
     return {
       title: task.title,
       description: task.description,
       statusId: task.statusId,
       priority: task.priority,
-      type: task.type ?? "",
+      typeId: task.typeId ?? "",
       assigneeId: task.assigneeId ?? "",
       points: task.points === null ? "" : String(task.points),
     };
@@ -47,9 +46,9 @@ function initialDraft(editor: Editor, task: Task | undefined, defaultStatusId: s
   return {
     title: "",
     description: "",
-    statusId: editor.mode === "create" ? editor.statusId : defaultStatusId,
+    statusId: editor.mode === "create" ? editor.statusId : defaults.statusId,
     priority: DEFAULT_PRIORITY,
-    type: DEFAULT_TYPE,
+    typeId: defaults.typeId ?? "",
     assigneeId: "",
     points: "",
   };
@@ -123,13 +122,27 @@ export function TaskEditor() {
 }
 
 function EditorForm({ editor, task }: { editor: Editor; task: Task | undefined }) {
-  const { view, boardId, statuses, statusesById, defaultStatusId } = useBoardContext();
+  const {
+    view,
+    boardId,
+    isOwner,
+    statuses,
+    statusesById,
+    defaultStatusId,
+    types,
+    typesById,
+    defaultTypeId,
+    people,
+    peopleById,
+  } = useBoardContext();
   const closeEditor = useUi((s) => s.closeEditor);
   const showToast = useUi((s) => s.showToast);
   const setMobileStatus = useUi((s) => s.setMobileStatus);
   const createTask = useCreateTask(boardId);
   const updateTask = useUpdateTask(boardId);
-  const [draft, setDraft] = useState(() => initialDraft(editor, task, defaultStatusId));
+  const [draft, setDraft] = useState(() =>
+    initialDraft(editor, task, { statusId: defaultStatusId, typeId: defaultTypeId }),
+  );
   const [error, setError] = useState<string | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
 
@@ -151,8 +164,9 @@ function EditorForm({ editor, task }: { editor: Editor; task: Task | undefined }
       // The column may have been deleted while the form was open.
       statusId: statusesById.has(draft.statusId) ? draft.statusId : defaultStatusId,
       priority: draft.priority,
-      type: draft.type || null,
-      assigneeId: draft.assigneeId || null,
+      // A type or person may have been deleted while the form was open.
+      typeId: typesById.has(draft.typeId) ? draft.typeId : null,
+      assigneeId: peopleById.has(draft.assigneeId) ? draft.assigneeId : null,
       points: parsePoints(draft.points),
     };
 
@@ -246,31 +260,35 @@ function EditorForm({ editor, task }: { editor: Editor; task: Task | undefined }
           </Select>
         </Field>
         <Field>
-          <Label htmlFor="tb-type">Task type</Label>
+          <ListLabel htmlFor="tb-type" list={isOwner ? "types" : undefined}>
+            Task type
+          </ListLabel>
           <Select
             id="tb-type"
-            value={draft.type}
-            onChange={(e) => set("type", e.target.value as TaskType | "")}
+            value={typesById.has(draft.typeId) ? draft.typeId : ""}
+            onChange={(e) => set("typeId", e.target.value)}
           >
             <option value="">No type</option>
-            {TASK_TYPES.map((t) => (
+            {types.map((t) => (
               <option key={t.id} value={t.id}>
-                {t.label}
+                {t.name}
               </option>
             ))}
           </Select>
         </Field>
         <Field>
-          <Label htmlFor="tb-assignee">Assignee</Label>
+          <ListLabel htmlFor="tb-assignee" list={isOwner ? "people" : undefined}>
+            Assignee
+          </ListLabel>
           <Select
             id="tb-assignee"
-            value={draft.assigneeId}
+            value={peopleById.has(draft.assigneeId) ? draft.assigneeId : ""}
             onChange={(e) => set("assigneeId", e.target.value)}
           >
             <option value="">Unassigned</option>
-            {view.members.map((m) => (
-              <option key={m.userId} value={m.userId}>
-                {m.name}
+            {people.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
               </option>
             ))}
           </Select>
@@ -292,5 +310,33 @@ function EditorForm({ editor, task }: { editor: Editor; task: Task | undefined }
         </Field>
       </div>
     </form>
+  );
+}
+
+/** A field label with an "Edit" link that opens the list's manager (owners). */
+function ListLabel({
+  htmlFor,
+  list,
+  children,
+}: {
+  htmlFor: string;
+  list?: ListKind;
+  children: string;
+}) {
+  const openListDialog = useUi((s) => s.openListDialog);
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <Label htmlFor={htmlFor}>{children}</Label>
+      {list && (
+        <button
+          type="button"
+          onClick={() => openListDialog(list)}
+          aria-label={list === "types" ? "Edit task types" : "Edit assignees"}
+          className="-my-1 rounded px-1 text-[12.5px] font-medium text-accent outline-none hover:underline focus-visible:shadow-focus"
+        >
+          Edit
+        </button>
+      )}
+    </div>
   );
 }

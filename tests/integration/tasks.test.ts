@@ -3,7 +3,15 @@ import { describe, expect, it } from "vitest";
 import { positionBetween } from "@/domain/ordering";
 import { createBoard, getBoardView } from "@/server/services/boards";
 import { createTask, deleteTask, restoreTask, updateTask } from "@/server/services/tasks";
-import { makeSharedBoard, makeTask, makeUser, statusIds, taskInput } from "./support/fixtures";
+import {
+  makeSharedBoard,
+  makeTask,
+  makeUser,
+  personIds,
+  statusIds,
+  taskInput,
+  typeIds,
+} from "./support/fixtures";
 
 describe("tasks", () => {
   it("creates tasks at the end of their column, in order", async () => {
@@ -17,14 +25,14 @@ describe("tasks", () => {
   });
 
   it("saves every field and trims text", async () => {
-    const { owner, member, board } = await makeSharedBoard();
+    const { owner, board } = await makeSharedBoard();
     const created = await makeTask(owner.id, board.id, {
       title: "  Spike CSV export  ",
       description: " Reporting pages ",
       status: "In Progress",
       priority: "critical",
-      type: "bug",
-      assigneeId: member.id,
+      type: "Bug",
+      assignee: "Max Member",
       points: 2.5,
     });
     expect(created).toMatchObject({
@@ -32,8 +40,8 @@ describe("tasks", () => {
       description: "Reporting pages",
       statusId: (await statusIds(board.id))["In Progress"],
       priority: "critical",
-      type: "bug",
-      assigneeId: member.id,
+      typeId: (await typeIds(board.id))["Bug"],
+      assigneeId: (await personIds(board.id))["Max Member"],
       points: 2.5,
     });
   });
@@ -58,12 +66,24 @@ describe("tasks", () => {
     );
   });
 
-  it("only assigns board members", async () => {
+  it("only uses task types and people from the same board", async () => {
     const { owner, board } = await makeSharedBoard();
-    const outsider = await makeUser("Out Sider");
-    await expect(makeTask(owner.id, board.id, { assigneeId: outsider.id })).rejects.toMatchObject({
+    const other = await createBoard(owner.id, "Other board");
+    const foreignType = (await typeIds(other.id))["Bug"];
+    const foreignPerson = (await personIds(other.id))["Olivia Owner"];
+    const created = await makeTask(owner.id, board.id);
+    await expect(makeTask(owner.id, board.id, { typeId: foreignType })).rejects.toMatchObject({
       status: 422,
     });
+    await expect(makeTask(owner.id, board.id, { assigneeId: foreignPerson })).rejects.toMatchObject(
+      { status: 422 },
+    );
+    await expect(
+      updateTask(owner.id, board.id, created.id, { assigneeId: randomUUID() }),
+    ).rejects.toMatchObject({ status: 422 });
+    await expect(
+      updateTask(owner.id, board.id, created.id, { typeId: null, assigneeId: null }),
+    ).resolves.toMatchObject({ typeId: null, assigneeId: null });
   });
 
   it("updates only the fields sent", async () => {

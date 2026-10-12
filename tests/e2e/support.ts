@@ -86,8 +86,10 @@ export async function fillTask(page: Page, fields: Partial<TaskFields>) {
     await dialog.getByLabel("Description").fill(fields.description);
   if (fields.priority) await dialog.getByRole("radio", { name: fields.priority }).click();
   if (fields.status) await dialog.getByLabel("Status").selectOption({ label: fields.status });
-  if (fields.type) await dialog.getByLabel("Task type").selectOption({ label: fields.type });
-  if (fields.assignee) await dialog.getByLabel("Assignee").selectOption({ label: fields.assignee });
+  if (fields.type)
+    await dialog.getByLabel("Task type", { exact: true }).selectOption({ label: fields.type });
+  if (fields.assignee)
+    await dialog.getByLabel("Assignee", { exact: true }).selectOption({ label: fields.assignee });
   if (fields.points !== undefined) await dialog.getByLabel("Story points").fill(fields.points);
 }
 

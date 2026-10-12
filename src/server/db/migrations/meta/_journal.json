@@ -22,6 +22,13 @@
       "when": 1791698718651,
       "tag": "0002_drop_task_status_key",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791814774799,
+      "tag": "0003_board_types_and_people",
+      "breakpoints": true
     }
   ]
 }

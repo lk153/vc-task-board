@@ -7,6 +7,7 @@ import { db } from "../db/client";
 import { board, boardInvite, boardMember, user } from "../db/schema";
 import { conflict, forbidden, gone, notFound } from "../errors";
 import { assertUuid, requireMember } from "./access";
+import { addPersonForUser } from "./people";
 
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{20,100}$/;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -161,6 +162,11 @@ export async function acceptInvite(
       .insert(boardMember)
       .values({ boardId: invite.boardId, userId: account.id, role: "member" })
       .onConflictDoNothing();
+    const [joiner] = await tx
+      .select({ id: user.id, name: user.name, email: user.email })
+      .from(user)
+      .where(eq(user.id, account.id));
+    if (joiner) await addPersonForUser(tx, invite.boardId, joiner);
     await tx
       .update(boardInvite)
       .set({ acceptedAt: new Date(), acceptedBy: account.id })

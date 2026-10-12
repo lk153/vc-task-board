@@ -21,3 +21,6 @@ attachDatabasePool(pool);
 
 export const db = drizzle({ client: pool, schema });
 export type Db = typeof db;
+/** A transaction handle, or the database itself, for helpers that work in both. */
+export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+export type Executor = Db | Tx;

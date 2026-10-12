@@ -4,9 +4,9 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { AlignLeft, Check, Hash, Trash2 } from "lucide-react";
 import type { KeyboardEvent, MouseEvent } from "react";
-import { DISPLAY, PRIORITIES, TASK_TYPES } from "@/config/board";
+import { DISPLAY, PRIORITIES } from "@/config/board";
 import type { Task } from "@/domain/task";
-import { assigneeTone, priorityTone, toneVars, typeTone } from "@/domain/tone";
+import { priorityTone, toneVars } from "@/domain/tone";
 import { Tag } from "@/components/ui/tag";
 import { cn } from "@/lib/cn";
 import { useUi } from "@/store/ui-store";
@@ -20,10 +20,10 @@ interface CardViewProps {
 
 /** Card body: title, description preview, tags. Shared by the list and the drag overlay. */
 function CardContent({ task }: { task: Task }) {
-  const { membersById } = useBoardContext();
-  const assignee = task.assigneeId ? membersById.get(task.assigneeId) : undefined;
+  const { peopleById, typesById } = useBoardContext();
+  const assignee = task.assigneeId ? peopleById.get(task.assigneeId) : undefined;
   const priority = PRIORITIES.find((p) => p.id === task.priority);
-  const type = task.type ? TASK_TYPES.find((t) => t.id === task.type) : undefined;
+  const type = task.typeId ? typesById.get(task.typeId) : undefined;
   const showPoints = DISPLAY.showStoryPoints && task.points !== null;
   const showDescription = DISPLAY.showDescription && task.description.trim() !== "";
 
@@ -49,9 +49,9 @@ function CardContent({ task }: { task: Task }) {
               {task.points!.toFixed(2)}
             </span>
           )}
-          {assignee && <Tag tone={assigneeTone(assignee.userId)}>{assignee.name}</Tag>}
+          {assignee && <Tag tone={assignee.tone}>{assignee.name}</Tag>}
           {priority && <Tag tone={priorityTone(priority.id)}>{priority.label}</Tag>}
-          {type && <Tag tone={typeTone(type.id)}>{type.label}</Tag>}
+          {type && <Tag tone={type.tone}>{type.name}</Tag>}
         </div>
       )}
     </>

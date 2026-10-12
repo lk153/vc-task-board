@@ -1,7 +1,13 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import type { BoardStatus, BoardSummary, BoardView, Member } from "@/domain/task";
+import type {
+  BoardPerson,
+  BoardStatus,
+  BoardSummary,
+  BoardTaskType,
+  BoardView,
+} from "@/domain/task";
 import { useUi } from "@/store/ui-store";
 
 export interface Me {
@@ -17,12 +23,18 @@ export interface BoardContextValue {
   boards: BoardSummary[];
   me: Me;
   isOwner: boolean;
-  membersById: Map<string, Member>;
   /** Columns in order, and by id. */
   statuses: BoardStatus[];
   statusesById: Map<string, BoardStatus>;
   /** Where "New task" and N put new tasks. */
   defaultStatusId: string;
+  /** Task types and assignees, by name, and by id. */
+  types: BoardTaskType[];
+  typesById: Map<string, BoardTaskType>;
+  /** The type new tasks get (none if the board has no default). */
+  defaultTypeId: string | null;
+  people: BoardPerson[];
+  peopleById: Map<string, BoardPerson>;
   /** Sign-in methods on my account, e.g. ["credential", "google"]. */
   providers: string[];
   googleEnabled: boolean;

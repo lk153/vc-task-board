@@ -3,11 +3,12 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo } from "react";
 import { COOKIES } from "@/config/board";
-import { defaultStatus, type BoardSummary, type BoardView } from "@/domain/task";
+import { defaultStatus, defaultTypeId, type BoardSummary, type BoardView } from "@/domain/task";
 import { ApiError } from "@/lib/api-client";
 import { useUi } from "@/store/ui-store";
 import { ChangePasswordDialog } from "../account/change-password-dialog";
 import { BoardDialogs } from "../boards/board-dialogs";
+import { ListDialog } from "../lists/list-dialog";
 import { ShareDialog } from "../sharing/share-dialog";
 import { StatusDialogs } from "../statuses/status-dialogs";
 import { DeleteTaskDialog } from "../task-delete/delete-task-dialog";
@@ -57,6 +58,13 @@ export function BoardApp({
     }
   }, [error, boardId, router]);
 
+  // A type or person in the filters may have been deleted (here or by someone else).
+  useEffect(() => {
+    useUi
+      .getState()
+      .pruneFilters(new Set(view.types.map((t) => t.id)), new Set(view.people.map((p) => p.id)));
+  }, [view.types, view.people]);
+
   const context = useMemo(
     () => ({
       boardId,
@@ -64,10 +72,14 @@ export function BoardApp({
       boards: initialBoards,
       me,
       isOwner: view.board.role === "owner",
-      membersById: new Map(view.members.map((m) => [m.userId, m])),
       statuses: view.statuses,
       statusesById: new Map(view.statuses.map((s) => [s.id, s])),
       defaultStatusId: defaultStatus(view.statuses)?.id ?? "",
+      types: view.types,
+      typesById: new Map(view.types.map((t) => [t.id, t])),
+      defaultTypeId: defaultTypeId(view.types),
+      people: view.people,
+      peopleById: new Map(view.people.map((p) => [p.id, p])),
       providers,
       googleEnabled,
     }),
@@ -92,6 +104,7 @@ export function BoardApp({
       <BoardDialogs />
       <ChangePasswordDialog />
       <StatusDialogs />
+      <ListDialog />
     </BoardContext>
   );
 }

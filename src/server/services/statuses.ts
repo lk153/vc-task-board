@@ -4,13 +4,12 @@ import { and, asc, count, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { DEFAULT_STATUSES, LIMITS } from "@/config/board";
 import { positionBetween, sortTasks } from "@/domain/ordering";
 import { createStatusSchema, updateStatusSchema, type BoardStatus } from "@/domain/task";
-import { db } from "../db/client";
+import { db, type Executor, type Tx } from "../db/client";
 import { boardStatus, task } from "../db/schema";
 import { conflict, invalid, notFound } from "../errors";
 import { assertUuid, requireMember } from "./access";
 
 type StatusRow = typeof boardStatus.$inferSelect;
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export function toStatus(row: StatusRow): BoardStatus {
   return {
@@ -23,7 +22,7 @@ export function toStatus(row: StatusRow): BoardStatus {
 }
 
 /** A board's columns, left to right. */
-export async function listStatuses(boardId: string, tx: Tx | typeof db = db) {
+export async function listStatuses(boardId: string, tx: Executor = db) {
   const rows = await tx
     .select()
     .from(boardStatus)
@@ -33,7 +32,7 @@ export async function listStatuses(boardId: string, tx: Tx | typeof db = db) {
 }
 
 /** The columns every new board starts with. */
-export async function insertDefaultStatuses(tx: Tx | typeof db, boardId: string) {
+export async function insertDefaultStatuses(tx: Executor, boardId: string) {
   const positions = generateNKeysBetween(null, null, DEFAULT_STATUSES.length);
   await tx
     .insert(boardStatus)
@@ -41,11 +40,7 @@ export async function insertDefaultStatuses(tx: Tx | typeof db, boardId: string)
 }
 
 /** 422 unless `statusId` is a column on this board (used by the task services). */
-export async function assertBoardStatus(
-  boardId: string,
-  statusId: string,
-  tx: Tx | typeof db = db,
-) {
+export async function assertBoardStatus(boardId: string, statusId: string, tx: Executor = db) {
   const [row] = await tx
     .select({ id: boardStatus.id })
     .from(boardStatus)

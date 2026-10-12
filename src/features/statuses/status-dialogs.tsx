@@ -12,7 +12,7 @@ import { ApiError } from "@/lib/api-client";
 import { useUi } from "@/store/ui-store";
 import { useCreateStatus, useDeleteStatus, useUpdateStatus } from "../board/api";
 import { useBoardContext } from "../board/board-context";
-import { TonePicker } from "./tone-picker";
+import { TonePicker } from "@/components/ui/tone-picker";
 
 const plural = (n: number) => `${n} task${n === 1 ? "" : "s"}`;
 

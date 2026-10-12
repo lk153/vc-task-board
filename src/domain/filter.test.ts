@@ -5,10 +5,11 @@ import {
   filterCount,
   isFiltering,
   matchTask,
+  pruneFilters,
   UNASSIGNED,
   type TaskFilters,
 } from "./filter";
-import type { Task } from "./task";
+import { sortByName, type Task } from "./task";
 
 const task = (overrides: Partial<Task> = {}): Task => ({
   id: "t1",
@@ -17,7 +18,7 @@ const task = (overrides: Partial<Task> = {}): Task => ({
   description: "Propose a solution for reporting pages",
   statusId: "todo",
   priority: "high",
-  type: "tech",
+  typeId: "tech",
   assigneeId: "u1",
   points: null,
   position: "a0",
@@ -46,12 +47,12 @@ describe("matchTask", () => {
 
   it("ANDs across groups", () => {
     const filters: TaskFilters = { ...EMPTY_FILTERS, priorities: ["high"], types: ["bug"] };
-    expect(matchTask(task({ priority: "high", type: "bug" }), filters)).toBe(true);
-    expect(matchTask(task({ priority: "high", type: "tech" }), filters)).toBe(false);
+    expect(matchTask(task({ priority: "high", typeId: "bug" }), filters)).toBe(true);
+    expect(matchTask(task({ priority: "high", typeId: "tech" }), filters)).toBe(false);
   });
 
   it("never matches a type filter for tasks without a type", () => {
-    expect(matchTask(task({ type: null }), { ...EMPTY_FILTERS, types: ["tech"] })).toBe(false);
+    expect(matchTask(task({ typeId: null }), { ...EMPTY_FILTERS, types: ["tech"] })).toBe(false);
   });
 
   it("supports filtering for unassigned tasks", () => {
@@ -76,6 +77,26 @@ describe("filter helpers", () => {
     expect(isFiltering({ ...EMPTY_FILTERS, query: "  " })).toBe(false);
     expect(isFiltering({ ...EMPTY_FILTERS, query: "a" })).toBe(true);
     expect(isFiltering({ ...EMPTY_FILTERS, assignees: [UNASSIGNED] })).toBe(true);
+  });
+
+  it("drops deleted task types and people from the filters", () => {
+    const filters: TaskFilters = {
+      ...EMPTY_FILTERS,
+      types: ["bug", "gone"],
+      assignees: ["u1", "left", UNASSIGNED],
+    };
+    expect(pruneFilters(filters, new Set(["bug"]), new Set(["u1"]))).toEqual({
+      ...filters,
+      types: ["bug"],
+      assignees: ["u1", UNASSIGNED],
+    });
+    expect(pruneFilters(filters, new Set(["bug", "gone"]), new Set(["u1", "left"]))).toBe(filters);
+  });
+
+  it("lists names alphabetically, ignoring case and accents, with numbers in order", () => {
+    const names = ["bug", "Ánh", "Task 10", "Task 2", "Zed"];
+    const sorted = sortByName(names.map((name, i) => ({ id: String(i), name })));
+    expect(sorted.map((x) => x.name)).toEqual(["Ánh", "bug", "Task 2", "Task 10", "Zed"]);
   });
 
   it("labels counts as 'x of y' only when filters hide tasks", () => {

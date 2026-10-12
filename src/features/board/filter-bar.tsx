@@ -1,14 +1,13 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Pencil } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
-import { PRIORITIES, TASK_TYPES, type Tone } from "@/config/board";
+import { PRIORITIES, type Tone } from "@/config/board";
 import { filterCount, UNASSIGNED } from "@/domain/filter";
-import { assigneeTone } from "@/domain/tone";
 import { MenuCheckboxItem, MenuItem, MenuPanel, MenuSeparator } from "@/components/ui/menu";
 import { Tag } from "@/components/ui/tag";
 import { cn } from "@/lib/cn";
-import { useUi, type FilterGroup } from "@/store/ui-store";
+import { useUi, type FilterGroup, type ListKind } from "@/store/ui-store";
 import { useBoardContext } from "./board-context";
 
 interface Option {
@@ -19,23 +18,37 @@ interface Option {
 
 /** Filter panel: one multi-select dropdown per group. OR within a group, AND across groups. */
 export function FilterBar() {
-  const { view } = useBoardContext();
+  const { types, people, isOwner } = useBoardContext();
   const show = useUi((s) => s.showFilters);
   const filters = useUi((s) => s.filters);
   const clearAll = useUi((s) => s.clearFilters);
   if (!show) return null;
 
-  const groups: { key: FilterGroup; label: string; allLabel: string; options: Option[] }[] = [
+  const groups: {
+    key: FilterGroup;
+    label: string;
+    allLabel: string;
+    options: Option[];
+    /** Owners can edit the list from its dropdown. */
+    list?: { kind: ListKind; label: string };
+  }[] = [
     { key: "priorities", label: "Priority", allLabel: "All priorities", options: [...PRIORITIES] },
-    { key: "types", label: "Task type", allLabel: "All types", options: [...TASK_TYPES] },
+    {
+      key: "types",
+      label: "Task type",
+      allLabel: "All types",
+      options: types.map((t) => ({ id: t.id, label: t.name, tone: t.tone })),
+      list: { kind: "types", label: "Edit task types…" },
+    },
     {
       key: "assignees",
       label: "Assignee",
       allLabel: "Anyone",
       options: [
-        ...view.members.map((m) => ({ id: m.userId, label: m.name, tone: assigneeTone(m.userId) })),
+        ...people.map((p) => ({ id: p.id, label: p.name, tone: p.tone })),
         { id: UNASSIGNED, label: "Unassigned", tone: "gray" as const },
       ],
+      list: { kind: "people", label: "Edit assignees…" },
     },
   ];
 
@@ -53,6 +66,7 @@ export function FilterBar() {
           allLabel={group.allLabel}
           options={group.options}
           selected={filters[group.key] as string[]}
+          list={isOwner ? group.list : undefined}
         />
       ))}
       {filterCount(filters) > 0 && (
@@ -82,15 +96,18 @@ function FilterDropdown({
   allLabel,
   options,
   selected,
+  list,
 }: {
   group: FilterGroup;
   label: string;
   allLabel: string;
   options: Option[];
   selected: string[];
+  list?: { kind: ListKind; label: string };
 }) {
   const toggle = useUi((s) => s.toggleFilter);
   const clear = useUi((s) => s.clearFilterGroup);
+  const openListDialog = useUi((s) => s.openListDialog);
   const active = selected.length > 0;
   const labelId = `filter-${group}-label`;
   const triggerId = `filter-${group}-trigger`;
@@ -126,6 +143,7 @@ function FilterDropdown({
           align="start"
           className="min-w-[max(13rem,var(--radix-dropdown-menu-trigger-width))]"
         >
+          {options.length === 0 && <MenuItem disabled>None yet</MenuItem>}
           {options.map((option) => (
             <MenuCheckboxItem
               key={option.id || "unassigned"}
@@ -135,13 +153,17 @@ function FilterDropdown({
               <Tag tone={option.tone}>{option.label}</Tag>
             </MenuCheckboxItem>
           ))}
+          {(active || list) && <MenuSeparator />}
           {active && (
-            <>
-              <MenuSeparator />
-              <MenuItem onSelect={() => clear(group)} className="text-accent">
-                Clear {label.toLowerCase()} filter
-              </MenuItem>
-            </>
+            <MenuItem onSelect={() => clear(group)} className="text-accent">
+              Clear {label.toLowerCase()} filter
+            </MenuItem>
+          )}
+          {list && (
+            <MenuItem onSelect={() => openListDialog(list.kind)}>
+              <Pencil size={15} aria-hidden />
+              {list.label}
+            </MenuItem>
           )}
         </MenuPanel>
       </DropdownMenu.Root>

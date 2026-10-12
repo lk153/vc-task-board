@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronDown, Pencil, Plus, Tags, Trash2, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { DropdownMenu } from "radix-ui";
 import { MenuItem, MenuLabel, MenuPanel, MenuSeparator } from "@/components/ui/menu";
@@ -13,6 +13,7 @@ export function BoardSwitcher() {
   const { view, boards: initialBoards, boardId, isOwner } = useBoardContext();
   const { data: boards } = useBoards(initialBoards);
   const openDialog = useUi((s) => s.openDialog);
+  const openListDialog = useUi((s) => s.openListDialog);
   const router = useRouter();
   const total = view.tasks.length;
 
@@ -56,6 +57,14 @@ export function BoardSwitcher() {
               <MenuItem onSelect={() => openDialog("renameBoard")}>
                 <Pencil size={15} />
                 Rename board
+              </MenuItem>
+              <MenuItem onSelect={() => openListDialog("types")}>
+                <Tags size={15} />
+                Task types
+              </MenuItem>
+              <MenuItem onSelect={() => openListDialog("people")}>
+                <Users size={15} />
+                Assignees
               </MenuItem>
               <MenuItem
                 className="text-danger data-[highlighted]:bg-danger-soft"

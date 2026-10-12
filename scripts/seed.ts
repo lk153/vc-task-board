@@ -11,7 +11,9 @@ import { and, eq } from "drizzle-orm";
 import { generateNKeysBetween } from "fractional-indexing";
 import type { CreateTaskInput } from "@/domain/task";
 import { auth } from "@/server/auth";
+import { addPersonForUser, listPeople } from "@/server/services/people";
 import { insertDefaultStatuses, listStatuses } from "@/server/services/statuses";
+import { insertDefaultTaskTypes, listTaskTypes } from "@/server/services/task-types";
 import { db } from "@/server/db/client";
 import { board, boardMember, task, user } from "@/server/db/schema";
 
@@ -30,9 +32,10 @@ const people = {
 } as const;
 type Person = keyof typeof people;
 
-/** `column` is the status name on the Demo board. */
-type SeedTask = Omit<CreateTaskInput, "assigneeId" | "statusId"> & {
+/** `column` and `type` are status and task type names on the Demo board. */
+type SeedTask = Omit<CreateTaskInput, "assigneeId" | "statusId" | "typeId"> & {
   column: string;
+  type: string;
   assignee: Person | null;
 };
 const t = (
@@ -41,7 +44,7 @@ const t = (
   description: string,
   assignee: Person | null,
   priority: SeedTask["priority"],
-  type: SeedTask["type"],
+  type: string,
   points: number | null,
 ): SeedTask => ({ column, title, description, assignee, priority, type, points });
 
@@ -53,7 +56,7 @@ const tasks: SeedTask[] = [
     "Propose solution for CSV download feature across reporting pages",
     "vnn",
     "high",
-    "tech",
+    "Tech Solution",
     null,
   ),
   t(
@@ -62,7 +65,7 @@ const tasks: SeedTask[] = [
     "Reference others team Kick-off for technical alignment",
     "vtq",
     "high",
-    "tech",
+    "Tech Solution",
     null,
   ),
   t(
@@ -71,7 +74,7 @@ const tasks: SeedTask[] = [
     "",
     "vtq",
     "high",
-    "tech",
+    "Tech Solution",
     null,
   ),
   t(
@@ -80,17 +83,17 @@ const tasks: SeedTask[] = [
     "Reason why fail with Gherkin Cucumber scenarios on CI",
     "vtq",
     "high",
-    "testing",
+    "Testing",
     null,
   ),
-  t("To Do", "[MDS] Knowledge Catchup", "", "vtq", "medium", "tech", null),
+  t("To Do", "[MDS] Knowledge Catchup", "", "vtq", "medium", "Tech Solution", null),
   t(
     "In Progress",
     "[Tech][Backend] Investigate data model integration",
     "",
     "vtq",
     "high",
-    "tech",
+    "Tech Solution",
     1,
   ),
   t(
@@ -99,17 +102,25 @@ const tasks: SeedTask[] = [
     "Check MDS compatible with our system and list the gaps",
     "vvq",
     "medium",
-    "uiux",
+    "UI/UX",
     null,
   ),
-  t("In Progress", "[Code] Fix Audit Issue braces package", "", "vtq", "critical", "review", null),
+  t(
+    "In Progress",
+    "[Code] Fix Audit Issue braces package",
+    "",
+    "vtq",
+    "critical",
+    "Review Code",
+    null,
+  ),
   t(
     "Backlog",
     "[Docs] Onboarding guide for new joiners",
     "Local setup, environments and release process",
     "vnn",
     "low",
-    "docs",
+    "Documentation",
     null,
   ),
   t(
@@ -118,10 +129,10 @@ const tasks: SeedTask[] = [
     "Selected date shifts by one day for UTC− users",
     "vvq",
     "high",
-    "bug",
+    "Bug",
     2,
   ),
-  t("Done", "[Setup] Configure CI pipeline for monorepo", "", "vtq", "medium", "tech", 3),
+  t("Done", "[Setup] Configure CI pipeline for monorepo", "", "vtq", "medium", "Tech Solution", 3),
 ];
 
 async function ensureUser(person: Person): Promise<{ id: string; created: boolean }> {
@@ -152,6 +163,14 @@ async function createDemoBoard(ids: Record<Person, string>) {
     { boardId: demo.id, userId: ids.vvq, role: "member" },
   ]);
   await insertDefaultStatuses(db, demo.id);
+  await insertDefaultTaskTypes(db, demo.id);
+  for (const person of Object.keys(people) as Person[]) {
+    await addPersonForUser(db, demo.id, { id: ids[person], ...people[person] });
+  }
+  const typeIds = new Map((await listTaskTypes(demo.id)).map((type) => [type.name, type.id]));
+  const personIds = new Map(
+    (await listPeople(demo.id)).map((person) => [person.userId, person.id]),
+  );
   for (const status of await listStatuses(demo.id)) {
     const column = tasks.filter((x) => x.column === status.name);
     if (column.length === 0) continue;
@@ -161,11 +180,11 @@ async function createDemoBoard(ids: Record<Person, string>) {
         title: item.title,
         description: item.description,
         priority: item.priority,
-        type: item.type,
+        typeId: typeIds.get(item.type) ?? null,
         points: item.points,
         boardId: demo.id,
         statusId: status.id,
-        assigneeId: item.assignee ? ids[item.assignee] : null,
+        assigneeId: item.assignee ? (personIds.get(ids[item.assignee]) ?? null) : null,
         position: positions[i],
         createdBy: ids.vtq,
       })),

@@ -7,7 +7,7 @@ describe("task schemas", () => {
     title: "Ship it",
     statusId: "6f1c2b9e-3a4d-4e5f-8a9b-0c1d2e3f4a5b",
     priority: "medium",
-    type: null,
+    typeId: null,
     assigneeId: null,
     points: 1.5,
   };
@@ -19,10 +19,11 @@ describe("task schemas", () => {
     });
   });
 
-  it("rejects malformed status ids, unknown priorities and types", () => {
+  it("rejects malformed status, type and assignee ids, and unknown priorities", () => {
     expect(createTaskSchema.safeParse({ ...valid, statusId: "blocked" }).success).toBe(false);
     expect(createTaskSchema.safeParse({ ...valid, priority: "urgent" }).success).toBe(false);
-    expect(createTaskSchema.safeParse({ ...valid, type: "epic" }).success).toBe(false);
+    expect(createTaskSchema.safeParse({ ...valid, typeId: "epic" }).success).toBe(false);
+    expect(createTaskSchema.safeParse({ ...valid, assigneeId: "user-1" }).success).toBe(false);
   });
 
   it("rejects negative points", () => {

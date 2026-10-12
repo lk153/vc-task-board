@@ -11,7 +11,9 @@ import { sortTasks } from "@/domain/ordering";
 import { db } from "../db/client";
 import { board, boardInvite, boardMember, task, user } from "../db/schema";
 import { isMember, requireMember } from "./access";
+import { addPersonForUser, listPeople } from "./people";
 import { insertDefaultStatuses, listStatuses } from "./statuses";
+import { insertDefaultTaskTypes, listTaskTypes } from "./task-types";
 import { toTask } from "./tasks";
 
 export const PERSONAL_BOARD_NAME = "My board";
@@ -34,6 +36,12 @@ export async function createBoard(userId: string, rawName: string): Promise<Boar
       .returning({ id: board.id, name: board.name });
     await tx.insert(boardMember).values({ boardId: created.id, userId, role: "owner" });
     await insertDefaultStatuses(tx, created.id);
+    await insertDefaultTaskTypes(tx, created.id);
+    const [creator] = await tx
+      .select({ id: user.id, name: user.name, email: user.email })
+      .from(user)
+      .where(eq(user.id, userId));
+    if (creator) await addPersonForUser(tx, created.id, creator);
     return { ...created, role: "owner" as const };
   });
 }
@@ -118,6 +126,8 @@ export async function getBoardView(userId: string, boardId: string): Promise<Boa
   return {
     board: { id: boardRow.id, name: boardRow.name, role },
     statuses: await listStatuses(boardId),
+    types: await listTaskTypes(boardId),
+    people: await listPeople(boardId),
     members,
     invites,
     tasks: sortTasks(taskRows.map(toTask)),

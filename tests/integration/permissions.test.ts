@@ -59,16 +59,17 @@ describe("board permissions", () => {
     });
   });
 
-  it("lets a member leave, and unassigns their tasks", async () => {
+  it("lets a member leave; they stay on the assignee list with their tasks", async () => {
     const { owner, member, board } = await makeSharedBoard();
-    const assigned = await makeTask(owner.id, board.id, { assigneeId: member.id });
+    const assigned = await makeTask(owner.id, board.id, { assignee: "Max Member" });
 
     await removeMember(member.id, board.id, member.id);
 
     await expect(getBoardView(member.id, board.id)).rejects.toMatchObject({ status: 404 });
     const view = await getBoardView(owner.id, board.id);
     expect(view.members.map((m) => m.userId)).toEqual([owner.id]);
-    expect(view.tasks.find((t) => t.id === assigned.id)?.assigneeId).toBeNull();
+    expect(view.people.map((p) => p.name)).toContain("Max Member");
+    expect(view.tasks.find((t) => t.id === assigned.id)?.assigneeId).toBe(assigned.assigneeId);
   });
 
   it("lets owners remove members", async () => {

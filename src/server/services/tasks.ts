@@ -4,9 +4,11 @@ import { bulkMoveSchema, createTaskSchema, updateTaskSchema, type Task } from "@
 import { planBulkMove, positionBetween } from "@/domain/ordering";
 import { db } from "../db/client";
 import { task } from "../db/schema";
-import { conflict, invalid, notFound } from "../errors";
-import { assertUuid, isMember, requireMember } from "./access";
+import { conflict, notFound } from "../errors";
+import { assertUuid, requireMember } from "./access";
+import { assertBoardPerson } from "./people";
 import { assertBoardStatus } from "./statuses";
+import { assertBoardTaskType } from "./task-types";
 
 type TaskRow = typeof task.$inferSelect;
 
@@ -18,7 +20,7 @@ export function toTask(row: TaskRow): Task {
     description: row.description,
     statusId: row.statusId,
     priority: row.priority,
-    type: row.type,
+    typeId: row.typeId,
     assigneeId: row.assigneeId,
     points: row.points,
     position: row.position,
@@ -38,10 +40,14 @@ async function endOfColumn(boardId: string, statusId: string): Promise<string> {
   return positionBetween(last?.position ?? null, null);
 }
 
-async function assertAssignable(boardId: string, assigneeId: string | null | undefined) {
-  if (assigneeId && !(await isMember(assigneeId, boardId))) {
-    throw invalid("The assignee must be a member of this board.");
-  }
+/** The status, task type and assignee must all belong to this board. */
+async function assertBoardRefs(
+  boardId: string,
+  refs: { statusId?: string; typeId?: string | null; assigneeId?: string | null },
+) {
+  if (refs.statusId) await assertBoardStatus(boardId, refs.statusId);
+  if (refs.typeId) await assertBoardTaskType(boardId, refs.typeId);
+  if (refs.assigneeId) await assertBoardPerson(boardId, refs.assigneeId);
 }
 
 async function findTask(boardId: string, taskId: string, { deleted = false } = {}) {
@@ -63,8 +69,7 @@ async function findTask(boardId: string, taskId: string, { deleted = false } = {
 export async function createTask(userId: string, boardId: string, raw: unknown): Promise<Task> {
   await requireMember(userId, boardId);
   const input = createTaskSchema.parse(raw);
-  await assertBoardStatus(boardId, input.statusId);
-  await assertAssignable(boardId, input.assigneeId);
+  await assertBoardRefs(boardId, input);
 
   const [row] = await db
     .insert(task)
@@ -90,8 +95,7 @@ export async function updateTask(
   await requireMember(userId, boardId);
   const patch = updateTaskSchema.parse(raw);
   const current = await findTask(boardId, taskId);
-  if (patch.statusId) await assertBoardStatus(boardId, patch.statusId);
-  if (patch.assigneeId !== undefined) await assertAssignable(boardId, patch.assigneeId);
+  await assertBoardRefs(boardId, patch);
 
   // Changing column without an explicit position appends to the new column.
   const position =
@@ -120,13 +124,10 @@ export async function deleteTask(userId: string, boardId: string, taskId: string
 /** Undo a delete. The task returns to its original column and position. */
 export async function restoreTask(userId: string, boardId: string, taskId: string): Promise<Task> {
   await requireMember(userId, boardId);
-  const current = await findTask(boardId, taskId, { deleted: true });
-  // The assignee may have left the board in the meantime.
-  const assigneeId =
-    current.assigneeId && (await isMember(current.assigneeId, boardId)) ? current.assigneeId : null;
+  await findTask(boardId, taskId, { deleted: true });
   const [row] = await db
     .update(task)
-    .set({ deletedAt: null, assigneeId, updatedAt: new Date() })
+    .set({ deletedAt: null, updatedAt: new Date() })
     .where(and(eq(task.id, taskId), eq(task.boardId, boardId)))
     .returning();
   return toTask(row);

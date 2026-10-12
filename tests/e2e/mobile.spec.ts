@@ -86,6 +86,23 @@ test.describe("mobile layout (< 720px)", () => {
     await expect(card(page, "Phone B")).toBeVisible();
   });
 
+  test("owners edit assignees from the board menu", async ({ page }) => {
+    await page.getByRole("button", { name: /^Board:/ }).click();
+    await page.getByRole("menuitem", { name: "Assignees" }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("button", { name: "Add person" }).click();
+    await dialog.getByLabel("Name").fill("Lan");
+    await dialog.getByRole("button", { name: "Add person" }).click();
+    await expect(dialog.getByRole("listitem").filter({ hasText: "Lan" })).toBeVisible();
+    await expectAccessible(page);
+    await dialog.getByRole("button", { name: "Done" }).click();
+
+    await page.getByRole("button", { name: "New task", exact: true }).click();
+    await fillTask(page, { title: "Bring the tent", assignee: "Lan" });
+    await editor(page).getByRole("button", { name: "Create task" }).click();
+    await expect(card(page, "Bring the tent")).toContainText("Lan");
+  });
+
   test("owners add and delete statuses from the tab row", async ({ page }) => {
     const tabs = page.getByRole("navigation", { name: "Status" });
     await page.getByRole("button", { name: "Add status" }).click();

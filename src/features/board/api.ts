@@ -9,13 +9,16 @@ import {
 } from "@tanstack/react-query";
 import { POLL_MS } from "@/config/board";
 import { planBulkMove, positionAtEnd, sortTasks, type TaskMove } from "@/domain/ordering";
-import type {
-  BoardStatus,
-  BoardSummary,
-  BoardView,
-  Invite,
-  Task,
-  UpdateTaskInput,
+import {
+  sortByName,
+  type BoardPerson,
+  type BoardStatus,
+  type BoardSummary,
+  type BoardTaskType,
+  type BoardView,
+  type Invite,
+  type Task,
+  type UpdateTaskInput,
 } from "@/domain/task";
 import { api, ApiError } from "@/lib/api-client";
 import { useUi } from "@/store/ui-store";
@@ -125,7 +128,7 @@ export function useCreateTask(boardId: string) {
           description: task.description,
           statusId: task.statusId,
           priority: task.priority,
-          type: task.type,
+          typeId: task.typeId,
           assigneeId: task.assigneeId,
           points: task.points,
         },
@@ -264,6 +267,111 @@ export function useDeleteStatus(boardId: string) {
   });
 }
 
+// ─── Task types ─────────────────────────────────────────────────────────────
+
+const deleteQuery = (moveTo: string | null) => (moveTo ? `?moveTo=${moveTo}` : "");
+
+export type TaskTypeInput = Pick<BoardTaskType, "name" | "tone" | "isDefault">;
+
+export function useCreateTaskType(boardId: string) {
+  return useBoardMutation(boardId, {
+    mutationFn: (input: TaskTypeInput) =>
+      api<BoardTaskType>(`/api/boards/${boardId}/types`, { method: "POST", body: input }),
+    settle: (view, created) => ({
+      ...view,
+      types: sortByName([
+        ...view.types
+          .filter((t) => t.id !== created.id)
+          .map((t) => (created.isDefault ? { ...t, isDefault: false } : t)),
+        created,
+      ]),
+    }),
+  });
+}
+
+/** Rename, recolor, or set / unset it as the type for new tasks. */
+export function useUpdateTaskType(boardId: string) {
+  return useBoardMutation(boardId, {
+    mutationFn: ({ typeId, patch }: { typeId: string; patch: Partial<TaskTypeInput> }) =>
+      api<BoardTaskType>(`/api/boards/${boardId}/types/${typeId}`, {
+        method: "PATCH",
+        body: patch,
+      }),
+    apply: (view, { typeId, patch }) => ({
+      ...view,
+      types: sortByName(
+        view.types.map((t) =>
+          t.id === typeId ? { ...t, ...patch } : patch.isDefault ? { ...t, isDefault: false } : t,
+        ),
+      ),
+    }),
+  });
+}
+
+/** Remove a type; its tasks get `moveTo` (which also inherits "default") or no type. */
+export function useDeleteTaskType(boardId: string) {
+  return useBoardMutation(boardId, {
+    mutationFn: ({ typeId, moveTo }: { typeId: string; moveTo: string | null }) =>
+      api<void>(`/api/boards/${boardId}/types/${typeId}${deleteQuery(moveTo)}`, {
+        method: "DELETE",
+      }),
+    apply: (view, { typeId, moveTo }) => {
+      const wasDefault = view.types.some((t) => t.id === typeId && t.isDefault);
+      return {
+        ...view,
+        types: view.types
+          .filter((t) => t.id !== typeId)
+          .map((t) => (wasDefault && t.id === moveTo ? { ...t, isDefault: true } : t)),
+        tasks: view.tasks.map((t) => (t.typeId === typeId ? { ...t, typeId: moveTo } : t)),
+      };
+    },
+  });
+}
+
+// ─── Assignees (people) ─────────────────────────────────────────────────────
+
+export type PersonInput = Pick<BoardPerson, "name" | "tone">;
+
+export function useCreatePerson(boardId: string) {
+  return useBoardMutation(boardId, {
+    mutationFn: (input: PersonInput) =>
+      api<BoardPerson>(`/api/boards/${boardId}/people`, { method: "POST", body: input }),
+    settle: (view, created) => ({
+      ...view,
+      people: sortByName([...view.people.filter((p) => p.id !== created.id), created]),
+    }),
+  });
+}
+
+export function useUpdatePerson(boardId: string) {
+  return useBoardMutation(boardId, {
+    mutationFn: ({ personId, patch }: { personId: string; patch: Partial<PersonInput> }) =>
+      api<BoardPerson>(`/api/boards/${boardId}/people/${personId}`, {
+        method: "PATCH",
+        body: patch,
+      }),
+    apply: (view, { personId, patch }) => ({
+      ...view,
+      people: sortByName(view.people.map((p) => (p.id === personId ? { ...p, ...patch } : p))),
+    }),
+  });
+}
+
+/** Remove someone from the assignee list; their tasks go to `moveTo` or nobody. */
+export function useDeletePerson(boardId: string) {
+  return useBoardMutation(boardId, {
+    mutationFn: ({ personId, moveTo }: { personId: string; moveTo: string | null }) =>
+      api<void>(`/api/boards/${boardId}/people/${personId}${deleteQuery(moveTo)}`, {
+        method: "DELETE",
+      }),
+    apply: (view, { personId, moveTo }) => ({
+      ...view,
+      people: view.people.filter((p) => p.id !== personId),
+      tasks: view.tasks.map((t) => (t.assigneeId === personId ? { ...t, assigneeId: moveTo } : t)),
+    }),
+  });
+}
+
 // ─── Sharing ────────────────────────────────────────────────────────────────
 
 export function useCreateInvite(boardId: string) {
@@ -295,7 +403,7 @@ export function useCancelInvite(boardId: string) {
   });
 }
 
-/** Remove a member (owners) or leave the board (yourself). */
+/** Remove a member (owners) or leave the board (yourself). They stay on the assignee list. */
 export function useRemoveMember(boardId: string) {
   return useBoardMutation(boardId, {
     mutationFn: (userId: string) =>
@@ -303,7 +411,6 @@ export function useRemoveMember(boardId: string) {
     apply: (view, userId) => ({
       ...view,
       members: view.members.filter((m) => m.userId !== userId),
-      tasks: view.tasks.map((t) => (t.assigneeId === userId ? { ...t, assigneeId: null } : t)),
     }),
   });
 }

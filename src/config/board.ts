@@ -1,8 +1,8 @@
 /**
- * Board vocabulary and tuning knobs: priorities, task types, color tones and
- * limits — types and validation derive from here. Statuses (columns) are
- * per-board data that owners manage in the app; DEFAULT_STATUSES is only the
- * set a new board starts with.
+ * Board vocabulary and tuning knobs: priorities, color tones and limits —
+ * types and validation derive from here. Statuses (columns), task types and
+ * assignees are per-board data that owners manage in the app; the DEFAULT_*
+ * lists below are only what a new board starts with.
  */
 
 export const TONES = [
@@ -38,16 +38,17 @@ export const PRIORITIES = [
   { id: "critical", label: "Critical", tone: "red", dot: "#c8102e" },
 ] as const satisfies readonly { id: string; label: string; tone: Tone; dot: string }[];
 
-export const TASK_TYPES = [
-  { id: "tech", label: "Tech Solution", tone: "blue" },
-  { id: "uiux", label: "UI/UX", tone: "lavender" },
-  { id: "review", label: "Review Code", tone: "purple" },
-  { id: "bug", label: "Bug", tone: "orange" },
-  { id: "testing", label: "Testing", tone: "teal" },
-  { id: "docs", label: "Documentation", tone: "gray" },
-] as const satisfies readonly { id: string; label: string; tone: Tone }[];
+/** Task types a new board starts with. "Tech Solution" is given to new tasks by default. */
+export const DEFAULT_TASK_TYPES = [
+  { name: "Tech Solution", tone: "blue", isDefault: true },
+  { name: "UI/UX", tone: "lavender", isDefault: false },
+  { name: "Review Code", tone: "purple", isDefault: false },
+  { name: "Bug", tone: "orange", isDefault: false },
+  { name: "Testing", tone: "teal", isDefault: false },
+  { name: "Documentation", tone: "gray", isDefault: false },
+] as const satisfies readonly { name: string; tone: Tone; isDefault: boolean }[];
 
-/** Member tag colors, picked by a hash of the user id. */
+/** Avatar colors, and the color a member gets when added to a board's assignees (hash of the user id). */
 export const ASSIGNEE_TONES = [
   "yellow",
   "navy",
@@ -62,7 +63,6 @@ export const ASSIGNEE_TONES = [
 ] as const satisfies readonly Tone[];
 
 export const DEFAULT_PRIORITY = "medium";
-export const DEFAULT_TYPE = "tech";
 
 /** Viewports narrower than this use the mobile layout. Keep in sync with `--breakpoint-desk` in globals.css. */
 export const BREAKPOINT = 720;
@@ -84,6 +84,12 @@ export const LIMITS = {
   statusName: 40,
   /** Columns per board. */
   statuses: 15,
+  typeName: 40,
+  /** Task types per board. */
+  types: 30,
+  personName: 80,
+  /** Assignees per board. */
+  people: 50,
 } as const;
 
 /** Card display options (the design's `showDescription` / `compactCards` / `showStoryPoints`). */

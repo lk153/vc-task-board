@@ -98,9 +98,10 @@ alternative that needs no Docker.
 Migrations must stay backward compatible with the previous release (expand → contract), because
 Vercel's Instant Rollback runs old code against the new schema.
 
-**One exception: the per-board statuses release** (migrations `0001_board_statuses` and
-`0002_drop_task_status_key`). It replaces `task.status` with `task.status_id`, so older code can't
-run against the new schema. Between its migration (the last build step) and the deployment going
+**One exception: the per-board statuses, task types and assignees releases** (migrations
+`0001_board_statuses`, `0002_drop_task_status_key` and `0003_board_types_and_people`). They replace
+`task.status`, `task.type` and the user-based `task.assignee_id` with references to per-board
+lists, so older code can't run against the new schema. Between its migration (the last build step) and the deployment going
 live, the older version shows errors for a few seconds, and Instant Rollback to a deployment from
 before it won't work. Deploy it when nobody is using the board. To go back, restore the Neon branch
 to a point before the deploy (Neon → Branches → Restore) and then roll back in Vercel.
@@ -122,14 +123,15 @@ Against Production, run with the Production `DATABASE_URL` and `BETTER_AUTH_SECR
 
 ```text
 src/app          routes: pages, API route handlers, auth pages, invite page
-src/features     UI by feature: board, statuses, task-editor, task-delete, boards, sharing, account, auth
+src/features     UI by feature: board, statuses, lists (task types, assignees), task-editor, task-delete,
+                 boards, sharing, account, auth
 src/components   shared UI primitives (button, field, modal, menu, tag, toast…)
 src/domain       pure logic shared by client and server: types, Zod schemas, filtering, ordering
 src/server       server-only: Better Auth, Drizzle schema + migrations, services, HTTP helpers
-src/config       board vocabulary (default statuses, priorities, types, tones) and tuning knobs
+src/config       board vocabulary (priorities, tones, default statuses and task types) and tuning knobs
 scripts          seed and user-admin
 tests            integration (PGlite) and e2e (Playwright)
 ```
 
-Common changes (adding a priority or task type, changing the schema, adding an endpoint) are
+Common changes (adding a priority, changing the schema, adding an endpoint) are
 listed in the maintenance guide in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md#8-maintenance-guide).

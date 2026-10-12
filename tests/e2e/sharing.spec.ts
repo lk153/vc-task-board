@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 import {
   card,
   createTask,
+  editor,
   expect,
   expectAccessible,
   newUserPage,
@@ -52,6 +53,13 @@ test.describe("boards and sharing", () => {
     await expect(member.getByRole("heading", { level: 1 })).toHaveText("Launch plan");
 
     // Members can create tasks and assign them to each other; the owner sees them.
+    // Only owners get the controls for editing task types and assignees.
+    await member.getByRole("button", { name: "New task" }).click();
+    await expect(
+      editor(member).getByLabel("Assignee", { exact: true }).locator("option"),
+    ).toHaveText(["Unassigned", "Max Member", "Olivia Owner"]);
+    await expect(editor(member).getByRole("button", { name: "Edit assignees" })).toHaveCount(0);
+    await member.keyboard.press("Escape");
     await createTask(member, { title: "Member's task", assignee: "Olivia Owner" });
     await page.reload();
     await expect(card(page, "Member's task")).toContainText("Olivia Owner");

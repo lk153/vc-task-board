@@ -14,7 +14,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import type { Tone } from "@/config/board";
-import type { Priority, Role, TaskType } from "@/domain/task";
+import type { Priority, Role } from "@/domain/task";
 
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 const createdAt = () => timestamptz("created_at").notNull().defaultNow();
@@ -138,6 +138,53 @@ export const boardStatus = pgTable(
   ],
 );
 
+/** A board's task types, managed by its owners. Listed by name. */
+export const boardTaskType = pgTable(
+  "board_task_type",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    boardId: uuid("board_id")
+      .notNull()
+      .references(() => board.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    tone: text("tone").$type<Tone>().notNull(),
+    /** Given to new tasks. At most one per board. */
+    isDefault: boolean("is_default").notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("board_task_type_name_idx").on(t.boardId, sql`lower(${t.name})`),
+    uniqueIndex("board_task_type_default_idx")
+      .on(t.boardId)
+      .where(sql`${t.isDefault}`),
+  ],
+);
+
+/**
+ * People tasks can be assigned to, managed by the board's owners. They don't
+ * need an account; members are added (and linked by `user_id`) when they
+ * create or join the board, and stay when they leave.
+ */
+export const boardPerson = pgTable(
+  "board_person",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    boardId: uuid("board_id")
+      .notNull()
+      .references(() => board.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    tone: text("tone").$type<Tone>().notNull(),
+    userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("board_person_name_idx").on(t.boardId, sql`lower(${t.name})`),
+    uniqueIndex("board_person_user_idx").on(t.boardId, t.userId),
+  ],
+);
+
 export const boardMember = pgTable(
   "board_member",
   {
@@ -194,8 +241,10 @@ export const task = pgTable(
       .notNull()
       .references(() => boardStatus.id, { onDelete: "restrict" }),
     priority: text("priority").$type<Priority>().notNull(),
-    type: text("type").$type<TaskType>(),
-    assigneeId: text("assignee_id").references(() => user.id, { onDelete: "set null" }),
+    /** Deleting a task type first moves its tasks to another type or none. */
+    typeId: uuid("type_id").references(() => boardTaskType.id, { onDelete: "set null" }),
+    /** Deleting a person first reassigns their tasks or leaves them unassigned. */
+    assigneeId: uuid("assignee_id").references(() => boardPerson.id, { onDelete: "set null" }),
     points: real("points"),
     position: positionKey("position").notNull(),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
