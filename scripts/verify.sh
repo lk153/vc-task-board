@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Final check before pushing to Vercel (`make verify`).
 #
-# Runs everything CI runs, then builds the exact commit you're about to push
+# Runs every check (lint, types, formatting, migration drift, security audit,
+# unit and integration tests), then builds the exact commit you're about to push
 # the way Vercel does: a fresh checkout, a frozen install, Vercel's build
 # command (env check → next build → migrations) and a brand-new empty
 # database, like a new Neon branch. Quiet while steps pass; prints the log

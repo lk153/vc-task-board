@@ -120,7 +120,7 @@ test-e2e: db-up ## End-to-end tests (builds the app; uses the taskboard_e2e data
 
 check: lint typecheck format-check test test-integration ## Everything fast: lint, types, format, unit, integration
 
-ci: check build test-e2e ## Everything CI runs, including the build and e2e tests
+ci: check build test-e2e ## make check, plus a production build and the e2e tests
 
 verify: ## Final check before pushing to Vercel (ALLOW_DIRTY=1, SKIP_AUDIT=1 to relax)
 	@bash scripts/verify.sh
