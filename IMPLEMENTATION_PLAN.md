@@ -24,7 +24,7 @@
 
 **Still to do (needs your accounts)**
 
-1. Create the GitHub repository, push, and protect `main` so CI (`.github/workflows/ci.yml`) must pass.
+1. Run `make verify` before every push. There is no CI on GitHub, so this is the only check.
 2. Import it in Vercel and add Neon with Preview branching (§4). Migrations run automatically during each build (`vercel.json`).
 3. Create a Google OAuth client and set the Google variables. The Google button stays hidden until they're set.
 4. On the first Production deploy: check Google sign-in on Production and a Preview URL, check that BotID works (it only runs on Vercel), run Lighthouse, do a quick pass in Safari and Firefox, and confirm Neon point-in-time restore.
@@ -85,7 +85,7 @@ See [§9 Roadmap](#9-roadmap).
 | Framework | **Next.js 16** (App Router, Cache Components) + **React 19** | Vercel detects it with no config. Server Components load the board on the server (streamed into a static shell), Route Handlers serve the API, and `proxy.ts` redirects signed-out users. |
 | Language | **TypeScript** (`strict`) | Types are shared by client and server. Adding a priority or task type causes a compile error everywhere it must be handled. |
 | Database | **Neon Postgres** via the Vercel Marketplace | Serverless Postgres. `DATABASE_URL` is added to the Vercel project automatically, and each Preview deployment gets its own copy of the database. |
-| ORM & migrations | **Drizzle ORM** + **drizzle-kit**, `pg` driver with `attachDatabasePool` (`@vercel/functions`) | Typed queries, and migrations are plain SQL files committed to the repo. The standard driver works with Neon, the CI Postgres container and local Postgres. |
+| ORM & migrations | **Drizzle ORM** + **drizzle-kit**, `pg` driver with `attachDatabasePool` (`@vercel/functions`) | Typed queries, and migrations are plain SQL files committed to the repo. The standard driver works with Neon and local Postgres. |
 | Auth | **Better Auth**: Google OAuth, email & password, `oAuthProxy` and `captcha` plugins, `@better-auth/drizzle-adapter` | One library covers both sign-in methods. Users and sessions are stored in our own Postgres, with no per-user fees. Rate limiting and password hashing are built in. The Auth.js maintainers now recommend Better Auth for new projects. |
 | Bot protection | Better Auth `captcha` plugin with **Vercel BotID** | Invisible checks on sign-up and sign-in. Needed because sign-up is open to everyone. |
 | Server data on the client | **TanStack Query 5** | Caches board data, applies changes optimistically and rolls them back on error, and refetches when the window regains focus and on a timer. |
@@ -99,7 +99,7 @@ See [§9 Roadmap](#9-roadmap).
 | Tests | **Vitest** + React Testing Library; Drizzle on **PGlite** (Postgres running in-process) for integration tests; **Playwright** + `@axe-core/playwright` | Fast tests of the API and permissions without Docker, plus multi-user e2e tests in real browsers. |
 | Code quality | ESLint (`eslint-config-next`), Prettier | Standard tooling. |
 | Runtime / package manager | Node.js **24 LTS**, **pnpm** (via Corepack) | Matches the Node runtime Vercel supports. |
-| CI/CD | GitHub Actions (with a Postgres service container) + Vercel Git integration | Each PR gets a Preview deployment with its own database branch. `main` deploys to Production. |
+| Deployment | Vercel Git integration, with `make verify` run locally before each push | Each PR gets a Preview deployment with its own database branch. `main` deploys to Production. |
 | Observability | Vercel Logs, Web Analytics, Speed Insights | Built in, with no extra infrastructure. |
 
 ---
@@ -183,7 +183,6 @@ tests/
 └── e2e/                             # Playwright specs (desktop + mobile), one per requirement area
 docker-compose.yml                   # local Postgres (port 5434) + taskboard_e2e database; pgAdmin on localhost:5050
 Makefile                             # shortcuts for every command (`make help`)
-.github/workflows/ci.yml             # lint → typecheck → format → unit → integration → build → e2e
 ```
 
 ### 3.3 Rendering & data flow
@@ -366,7 +365,7 @@ Configured in `server/auth.ts`.
 10. **Maintainer tools:** run `pnpm user:admin <command> <email>` locally with the Production `DATABASE_URL` (pulled with `vercel env pull --environment=production`). Only maintainers have access.
 
 **`package.json` scripts:** `dev`, `build`, `start`, `lint`, `typecheck`, `format`, `format:check`, `test`, `test:integration`, `test:e2e`, `db:up`, `db:generate`, `db:migrate`, `db:seed`, `db:studio`, `user:admin`.
-**CI (GitHub Actions):** install → lint → typecheck → format check → unit + integration tests (PGlite) → build → Playwright against `next start` and a Postgres service container. Playwright's global setup migrates and empties the e2e database; every test signs up through the real form, and no test-only sign-in shortcut exists. Each browser context gets its own client IP, so auth rate limits don't leak between tests.
+**Checks before pushing (`make verify`):** lint → typecheck → format check → migration drift → security audit → unit + integration tests (PGlite) → Vercel's build command on a fresh checkout and an empty database → Playwright against `next start` and the local Postgres. Playwright's global setup migrates and empties the e2e database; every test signs up through the real form, and no test-only sign-in shortcut exists. Each browser context gets its own client IP, so auth rate limits don't leak between tests.
 
 ---
 
@@ -376,7 +375,7 @@ Production goes live in **Phase 0**. Each later phase is one or more PRs, each w
 
 | # | Phase | Est. | Status |
 | --- | --- | --- | --- |
-| 0 | Foundation & pipeline (Vercel + Neon) | 1 d | Code and CI done; Vercel, Neon and GitHub setup need your accounts |
+| 0 | Foundation & pipeline (Vercel + Neon) | 1 d | Code and `make verify` done; Vercel, Neon and GitHub setup need your accounts |
 | 1 | Design system & app shell | 1 d | Done |
 | 2 | Data model & Google sign-in | 2 d | Done; Google needs OAuth credentials to test |
 | 3 | Password sign-in | 1 d | Done |
@@ -394,8 +393,8 @@ Production goes live in **Phase 0**. Each later phase is one or more PRs, each w
 
 - Scaffold with `create-next-app` (TS, App Router, Tailwind, ESLint, `src/`). Add Prettier, Vitest and Playwright.
 - Connect Vercel and add Neon from the Marketplace with Preview branching (region `iad1` / `aws-us-east-1`). Set up Drizzle with a first (empty) migration and the `db:*` scripts. Set the build command to `build && db:migrate`.
-- GitHub Actions with a Postgres service container. Branch protection on `main`.
-- **Exit:** a placeholder page is live in Production. A test PR gets a Preview URL **and** its own database branch, with green CI.
+- `make verify`: every check, a Vercel-style build and the e2e tests, run locally before pushing.
+- **Exit:** a placeholder page is live in Production. A test PR gets a Preview URL **and** its own database branch, and `make verify` passes.
 
 ### Phase 1 — Design system & app shell
 
@@ -503,7 +502,7 @@ Production goes live in **Phase 0**. Each later phase is one or more PRs, each w
 
 ## 7. Definition of Done (every PR)
 
-- `make verify` passes locally before pushing (lint, types, formatting, migration drift, security audit, unit, integration, a Vercel-style build of the commit, e2e), and CI passes on the PR.
+- `make verify` passes locally before pushing (lint, types, formatting, migration drift, security audit, unit, integration, a Vercel-style build of the commit, e2e).
 - Preview URL (with its own database branch) checked at 375 px and 1280 px, in light and dark.
 - Every new or changed endpoint has permission tests for a member and a non-member.
 - Migrations are generated by `drizzle-kit`, committed, and work with the previous release (expand → contract).
