@@ -3,7 +3,7 @@
 #
 # Runs everything CI runs, then builds the exact commit you're about to push
 # the way Vercel does: a fresh checkout, a frozen install, Vercel's build
-# command (env check → migrations → next build) and a brand-new empty
+# command (env check → next build → migrations) and a brand-new empty
 # database, like a new Neon branch. Quiet while steps pass; prints the log
 # of a step that fails.
 #
@@ -171,7 +171,7 @@ run "Integration tests" pnpm test:integration
 section "Vercel build (fresh checkout of HEAD, empty database)"
 run "Fresh database" fresh_verify_database
 run "Checkout + frozen install" checkout_head
-run "Env check, migrate, next build" vercel_build
+run "Env check, next build, migrate" vercel_build
 
 section "End-to-end (production build, desktop + mobile)"
 run "Playwright" e2e_tests

@@ -88,7 +88,7 @@ alternative that needs no Docker.
    `iad1`). Turn on **Preview** branching and "Resource must be active before deployment".
 3. Set the environment variables above.
 4. Deploy. `vercel.json` sets the build command to check the environment variables, run
-   `db:migrate`, then `next build`. Every deployment (including each Preview database branch) is
+   `next build`, then `db:migrate`. Every deployment (including each Preview database branch) is
    migrated automatically, and a missing `DATABASE_URL` or `BETTER_AUTH_SECRET` stops the build
    with a message saying what to set. Variables only apply to new deployments, so redeploy after
    changing them.
@@ -100,10 +100,10 @@ Vercel's Instant Rollback runs old code against the new schema.
 
 **One exception: the per-board statuses release** (migrations `0001_board_statuses` and
 `0002_drop_task_status_key`). It replaces `task.status` with `task.status_id`, so older code can't
-run against the new schema. While that deployment builds, the live (older) version shows errors
-for a minute or two, and Instant Rollback to a deployment from before it won't work. Deploy it when
-nobody is using the board. To go back, restore the Neon branch to a point before the deploy
-(Neon → Branches → Restore) and then roll back in Vercel.
+run against the new schema. Between its migration (the last build step) and the deployment going
+live, the older version shows errors for a few seconds, and Instant Rollback to a deployment from
+before it won't work. Deploy it when nobody is using the board. To go back, restore the Neon branch
+to a point before the deploy (Neon → Branches → Restore) and then roll back in Vercel.
 
 ## Maintainer tools
 
